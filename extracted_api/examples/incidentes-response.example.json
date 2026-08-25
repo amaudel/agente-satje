@@ -1,0 +1,34 @@
+[
+  {
+    "idJudicatura": "01371",
+    "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+    "ciudad": "CUENCA",
+    "lstIncidenteJudicatura": [
+      {
+        "idIncidenteJudicatura": 20181767,
+        "idMovimientoJuicioIncidente": 19384296,
+        "idJudicaturaDestino": "01371",
+        "fechaCrea": "2017-11-08T16:51:52.267",
+        "incidente": 1,
+        "lstLitiganteActor": [
+          {
+            "tipoLitigante": "ACTOR",
+            "nombresLitigante": "PERSONA DE PRUEBA",
+            "representadoPor": "PERSONA DE PRUEBA",
+            "idLitigante": 33266569
+          }
+        ],
+        "lstLitiganteDemandado": [
+          {
+            "tipoLitigante": "DEMANDADO",
+            "nombresLitigante": "EMPRESA DE PRUEBA",
+            "representadoPor": "EMPRESA DE PRUEBA",
+            "idLitigante": 33280811
+          }
+        ],
+        "litiganteActor": null,
+        "litiganteDemandado": null
+      }
+    ]
+  }
+]

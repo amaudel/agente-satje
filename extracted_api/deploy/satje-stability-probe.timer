@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SATJE controlled stability probe hourly
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1h
+Persistent=true
+Unit=satje-stability-probe.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,330 @@
+{
+  "info": {
+    "name": "Ecuador Judicial API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Contrato privado para integrar la app comercial con Ecuador Judicial API."
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      {
+        "key": "key",
+        "value": "X-API-Key",
+        "type": "string"
+      },
+      {
+        "key": "value",
+        "value": "{{ECUADOR_JUDICIAL_API_KEY}}",
+        "type": "string"
+      },
+      {
+        "key": "in",
+        "value": "header",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "ECUADOR_JUDICIAL_API_URL",
+      "value": "{{ECUADOR_JUDICIAL_API_URL}}"
+    },
+    {
+      "key": "idJuicio",
+      "value": "00000000000000"
+    },
+    {
+      "key": "codigoActuacion",
+      "value": "159075756"
+    },
+    {
+      "key": "documentoId",
+      "value": "doc_aGJhLWNvZGUtMQ"
+    }
+  ],
+  "item": [
+    {
+      "name": "Buscar causas por cedula/RUC",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/buscar",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "causas",
+            "buscar"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"cedula\": \"0100000000\",\n  \"roles\": [\n    \"actor\",\n    \"demandado\"\n  ],\n  \"incluirTodasLasPaginas\": true\n}"
+        }
+      }
+    },
+    {
+      "name": "Consultar actuaciones por numero de proceso",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/{{idJuicio}}/actuaciones",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "causas",
+            "{{idJuicio}}",
+            "actuaciones"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Consultar actuaciones paginadas",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/{{idJuicio}}/actuaciones/paginadas?page=1&pageSize=20&orden=desc&fechaDesde=&fechaHasta=&tipo=&tieneDocumento=",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "causas",
+            "{{idJuicio}}",
+            "actuaciones",
+            "paginadas"
+          ],
+          "query": [
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "pageSize",
+              "value": "20"
+            },
+            {
+              "key": "orden",
+              "value": "desc"
+            },
+            {
+              "key": "fechaDesde",
+              "value": "",
+              "description": "Opcional, formato AAAA-MM-DD"
+            },
+            {
+              "key": "fechaHasta",
+              "value": "",
+              "description": "Opcional, formato AAAA-MM-DD"
+            },
+            {
+              "key": "tipo",
+              "value": "",
+              "description": "Filtro opcional por tipo de actuacion"
+            },
+            {
+              "key": "tieneDocumento",
+              "value": "",
+              "description": "Opcional: true o false"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Consultar resoluciones candidatas",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/{{idJuicio}}/resoluciones?limit=20&fechaDesde=&fechaHasta=&incluirSinDocumento=true",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "causas",
+            "{{idJuicio}}",
+            "resoluciones"
+          ],
+          "query": [
+            {
+              "key": "limit",
+              "value": "20"
+            },
+            {
+              "key": "fechaDesde",
+              "value": "",
+              "description": "Opcional, formato AAAA-MM-DD"
+            },
+            {
+              "key": "fechaHasta",
+              "value": "",
+              "description": "Opcional, formato AAAA-MM-DD"
+            },
+            {
+              "key": "incluirSinDocumento",
+              "value": "true"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Calcular riesgo de abandono",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/{{idJuicio}}/abandono/riesgo?fechaCorte=2026-07-14&alertaDias=30",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "causas",
+            "{{idJuicio}}",
+            "abandono",
+            "riesgo"
+          ],
+          "query": [
+            {
+              "key": "fechaCorte",
+              "value": "2026-07-14"
+            },
+            {
+              "key": "alertaDias",
+              "value": "30"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Listar documentos HBA de actuacion",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/{{idJuicio}}/actuaciones/{{codigoActuacion}}/documentos",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "causas",
+            "{{idJuicio}}",
+            "actuaciones",
+            "{{codigoActuacion}}",
+            "documentos"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Extraer texto de documento HBA",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/documentos/hba/extract-text",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "documentos",
+            "hba",
+            "extract-text"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"documentoId\": \"{{documentoId}}\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Generar PDF consolidado",
+      "request": {
+        "method": "POST",
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/{{idJuicio}}/pdf",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "causas",
+            "{{idJuicio}}",
+            "pdf"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Metricas operativas (solo OPS_API_KEY)",
+      "auth": {
+        "type": "apikey",
+        "apikey": [
+          {
+            "key": "key",
+            "value": "X-API-Key",
+            "type": "string"
+          },
+          {
+            "key": "value",
+            "value": "{{ECUADOR_JUDICIAL_OPS_API_KEY}}",
+            "type": "string"
+          },
+          {
+            "key": "in",
+            "value": "header",
+            "type": "string"
+          }
+        ]
+      },
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/ops/metrics?since_seconds=86400",
+          "host": [
+            "{{ECUADOR_JUDICIAL_API_URL}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "ops",
+            "metrics"
+          ],
+          "query": [
+            {
+              "key": "since_seconds",
+              "value": "86400"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

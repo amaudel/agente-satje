@@ -1,0 +1,11 @@
+[Unit]
+Description=Run SATJE production alert checks hourly
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=1h
+Persistent=true
+Unit=satje-alert-check.service
+
+[Install]
+WantedBy=timers.target

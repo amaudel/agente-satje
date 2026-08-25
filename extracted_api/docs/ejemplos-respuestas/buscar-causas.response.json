@@ -1,0 +1,120 @@
+{
+  "success": true,
+  "source": "SATJE",
+  "mode": "fixture",
+  "retrievedAt": "2026-07-14T14:16:21.847573+00:00",
+  "cedula": "0100000000",
+  "total": 3,
+  "data": [
+    {
+      "idJuicio": "00000000000002",
+      "numeroProceso": "00000000000002",
+      "estadoActual": "A",
+      "materia": null,
+      "accion": "ALIMENTOS",
+      "judicatura": null,
+      "fechaIngreso": "2020-07-23T17:54:22.537+00:00",
+      "rolesEncontrados": [
+        "actor"
+      ],
+      "raw": {
+        "id": 1,
+        "idJuicio": "00000000000002",
+        "estadoActual": "A",
+        "idMateria": 33,
+        "idProvincia": null,
+        "idCanton": null,
+        "idJudicatura": null,
+        "nombreDelito": "ALIMENTOS",
+        "fechaIngreso": "2020-07-23T17:54:22.537+00:00",
+        "nombre": null,
+        "cedula": null,
+        "idEstadoJuicio": null,
+        "nombreMateria": null,
+        "nombreEstadoJuicio": null,
+        "nombreJudicatura": null,
+        "nombreTipoResolucion": null,
+        "nombreTipoAccion": null,
+        "fechaProvidencia": null,
+        "nombreProvidencia": null,
+        "nombreProvincia": null,
+        "iedocumentoAdjunto": "N"
+      }
+    },
+    {
+      "idJuicio": "00000000000000",
+      "numeroProceso": "00000000000000",
+      "estadoActual": "A",
+      "materia": null,
+      "accion": "ACCION POR DESPIDO INEFICAZ",
+      "judicatura": null,
+      "fechaIngreso": "2017-11-08T21:51:52.267+00:00",
+      "rolesEncontrados": [
+        "actor"
+      ],
+      "raw": {
+        "id": 2,
+        "idJuicio": "00000000000000",
+        "estadoActual": "A",
+        "idMateria": 35,
+        "idProvincia": null,
+        "idCanton": null,
+        "idJudicatura": null,
+        "nombreDelito": "ACCION POR DESPIDO INEFICAZ",
+        "fechaIngreso": "2017-11-08T21:51:52.267+00:00",
+        "nombre": null,
+        "cedula": null,
+        "idEstadoJuicio": null,
+        "nombreMateria": null,
+        "nombreEstadoJuicio": null,
+        "nombreJudicatura": null,
+        "nombreTipoResolucion": null,
+        "nombreTipoAccion": null,
+        "fechaProvidencia": null,
+        "nombreProvidencia": null,
+        "nombreProvincia": null,
+        "iedocumentoAdjunto": "N"
+      }
+    },
+    {
+      "idJuicio": "00000000000001",
+      "numeroProceso": "00000000000001",
+      "estadoActual": "A",
+      "materia": null,
+      "accion": "ACCION POR DESPIDO INEFICAZ",
+      "judicatura": null,
+      "fechaIngreso": "2017-11-06T20:18:22.923+00:00",
+      "rolesEncontrados": [
+        "actor"
+      ],
+      "raw": {
+        "id": 3,
+        "idJuicio": "00000000000001",
+        "estadoActual": "A",
+        "idMateria": 35,
+        "idProvincia": null,
+        "idCanton": null,
+        "idJudicatura": null,
+        "nombreDelito": "ACCION POR DESPIDO INEFICAZ",
+        "fechaIngreso": "2017-11-06T20:18:22.923+00:00",
+        "nombre": null,
+        "cedula": null,
+        "idEstadoJuicio": null,
+        "nombreMateria": null,
+        "nombreEstadoJuicio": null,
+        "nombreJudicatura": null,
+        "nombreTipoResolucion": null,
+        "nombreTipoAccion": null,
+        "fechaProvidencia": null,
+        "nombreProvidencia": null,
+        "nombreProvincia": null,
+        "iedocumentoAdjunto": "N"
+      }
+    }
+  ],
+  "requestId": "req_8d55392490794486",
+  "cache": {
+    "hit": false,
+    "ttlSeconds": 300
+  }
+}

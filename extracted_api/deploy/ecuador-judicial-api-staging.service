@@ -1,0 +1,17 @@
+[Unit]
+Description=Ecuador Judicial SATJE API Staging
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/home/ubuntu/.openclaw/workspace/projects/ecuador-judicial-api
+EnvironmentFile=/home/ubuntu/.openclaw/workspace/projects/ecuador-judicial-api/.env.staging
+ExecStart=/home/ubuntu/.openclaw/workspace/projects/ecuador-judicial-api/.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8011
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

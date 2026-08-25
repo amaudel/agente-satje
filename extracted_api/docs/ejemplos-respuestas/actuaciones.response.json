@@ -1,0 +1,46 @@
+{
+  "success": true,
+  "idJuicio": "00000000000000",
+  "mode": "fixture",
+  "source": "SATJE",
+  "retrievedAt": "2026-07-14T15:30:00Z",
+  "cache": {
+    "hit": false,
+    "ttlSeconds": 300
+  },
+  "pagination": {
+    "page": 1,
+    "pageSize": 10,
+    "hasMore": false
+  },
+  "total": 2,
+  "incidentes": [
+    {
+      "idJudicatura": "00000",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE PRUEBA",
+      "actuaciones": [
+        {
+          "codigoActuacion": 159075756,
+          "fecha": "2025-10-29T10:28:48Z",
+          "tipo": "RAZON DE INSCRIPCION",
+          "actividad": "Ejemplo anonimizado: se agrega razon de inscripcion remitida por Registro de la Propiedad.",
+          "documentos": [
+            {
+              "documentoId": "doc_aGJhLWNvZGUtMQ",
+              "nombreArchivo": "registro_propiedad_anonimizado.pdf",
+              "tipo": "application/pdf",
+              "disponible": true
+            }
+          ]
+        },
+        {
+          "codigoActuacion": 159075700,
+          "fecha": "2025-10-17T09:10:00Z",
+          "tipo": "OFICIO",
+          "actividad": "Ejemplo anonimizado: oficio dirigido al Registro de la Propiedad. No confirma por si solo la inscripcion.",
+          "documentos": []
+        }
+      ]
+    }
+  ]
+}

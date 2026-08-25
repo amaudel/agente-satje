@@ -1,0 +1,46 @@
+{
+  "request": {
+    "method": "POST",
+    "url": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/buscar",
+    "headers": {
+      "X-API-Key": "{{ECUADOR_JUDICIAL_API_KEY}}",
+      "Content-Type": "application/json"
+    },
+    "body": {
+      "cedula": "0100000000",
+      "roles": ["actor", "demandado"],
+      "incluirTodasLasPaginas": true
+    }
+  },
+  "response": {
+    "success": true,
+    "source": "SATJE",
+    "mode": "fixture",
+    "retrievedAt": "2026-07-14T14:16:21.847573+00:00",
+    "cedula": "0100000000",
+    "total": 3,
+    "data": [
+      {
+        "idJuicio": "00000000000002",
+        "numeroProceso": "00000000000002",
+        "estadoActual": "A",
+        "accion": "ALIMENTOS",
+        "fechaIngreso": "2020-07-23T17:54:22.537+00:00",
+        "rolesEncontrados": ["actor"]
+      },
+      {
+        "idJuicio": "00000000000000",
+        "numeroProceso": "00000000000000",
+        "estadoActual": "A",
+        "accion": "ACCION POR DESPIDO INEFICAZ",
+        "fechaIngreso": "2017-11-08T21:51:52.267+00:00",
+        "rolesEncontrados": ["actor"]
+      }
+    ],
+    "requestId": "req_ejemplo",
+    "cache": {
+      "hit": false,
+      "ttlSeconds": 300
+    }
+  }
+}

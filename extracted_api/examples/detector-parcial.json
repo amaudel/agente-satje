@@ -1,0 +1,21 @@
+{
+  "estado": "parcial",
+  "resultado": {
+    "acto": "EMBARGO",
+    "fechaProvidencia": "2025-10-17",
+    "fechaInscripcion": null,
+    "motivo": "Se encontro providencia u oficio dirigido al Registro de la Propiedad, pero no una razon de inscripcion efectiva."
+  },
+  "evidencia": {
+    "documentoId": "doc_b2ZpY2lvLXJlZ2lzdHJv",
+    "nombreArchivo": "Oficio_Registro_Propiedad.pdf",
+    "pagina": 1,
+    "textoSoporte": "Oficiese al Registro de la Propiedad para que inscriba la medida cautelar dispuesta.",
+    "metodoExtraccion": "embedded_text",
+    "calidadExtraccion": "media"
+  },
+  "source": "SATJE",
+  "mode": "live",
+  "retrievedAt": "2026-07-14T15:30:00+00:00",
+  "requestId": "req_ejemplo"
+}

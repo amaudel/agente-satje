@@ -1,0 +1,62 @@
+{
+  "success": true,
+  "source": "SATJE",
+  "mode": "fixture",
+  "retrievedAt": "2026-07-14T16:20:00Z",
+  "idJuicio": "00000000000000",
+  "fechaCorte": "2026-07-14",
+  "baseLegalReferencial": "COGEP arts. 245 y 246: el art. 245 establece el plazo legal aplicable para el abandono y el art. 246 regula el computo desde el dia siguiente de la ultima notificacion o actuacion procesal. Referencia usada como alerta preventiva conforme a criterios publicados por la Funcion Judicial.",
+  "reglaApp": "Generar alerta si el proceso principal o la unidad deprecada tienen reloj en estado alerta, critico o vencido.",
+  "relojProcesoPrincipal": {
+    "ambito": "proceso_principal",
+    "ultimaActuacion": {
+      "fecha": "2026-07-06",
+      "codigo": 123456789,
+      "tipo": "AUTO DE SUSTANCIACION",
+      "actividadResumen": "Se incorpora escrito y se dispone estar a lo ordenado respecto de la citacion.",
+      "idIncidenteJudicatura": 100,
+      "incidente": 1,
+      "nombreJudicatura": "UNIDAD JUDICIAL CIVIL CUENCA"
+    },
+    "inicioComputo": "2026-07-07",
+    "plazoLegalMeses": 6,
+    "fechaReferencialAbandono": "2027-01-07",
+    "diasRestantes": 177,
+    "estadoAlerta": "vigilancia"
+  },
+  "relojUnidadDeprecada": {
+    "ambito": "unidad_deprecada",
+    "ultimaActuacion": {
+      "fecha": "2026-07-02",
+      "codigo": 123456700,
+      "tipo": "RAZON",
+      "actividadResumen": "Unidad deprecada informa diligencia pendiente de citacion.",
+      "idIncidenteJudicatura": 101,
+      "incidente": 2,
+      "nombreJudicatura": "UNIDAD JUDICIAL MULTICOMPETENTE CIVIL NARANJAL"
+    },
+    "inicioComputo": "2026-07-03",
+    "plazoLegalMeses": 6,
+    "fechaReferencialAbandono": "2027-01-03",
+    "diasRestantes": 173,
+    "estadoAlerta": "vigilancia"
+  },
+  "alertaGeneral": {
+    "estadoAlerta": "vigilancia",
+    "ambitoMasCercano": "unidad_deprecada",
+    "diasRestantes": 173,
+    "fechaReferencialAbandono": "2027-01-03"
+  },
+  "advertencias": [
+    "Es una alerta preventiva y no una declaratoria juridica de abandono.",
+    "La app debe mostrar ambos relojes cuando exista unidad deprecada.",
+    "Una actuacion util posterior puede reiniciar el computo.",
+    "Si la demora depende del juzgado o de una diligencia pendiente de despacho, requiere revision juridica."
+  ],
+  "partialErrors": [],
+  "requestId": "req_xxx",
+  "cache": {
+    "hit": false,
+    "ttlSeconds": 300
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "statusCode": 200,
+  "contentType": "application/pdf",
+  "headers": {
+    "Content-Disposition": "attachment; filename=\"expel_00000000000000_2026-07-14.pdf\"",
+    "X-Request-Id": "req_ejemplo",
+    "X-PDF-Duration-Ms": "82.41"
+  },
+  "body": "Binario PDF. No se representa en JSON."
+}

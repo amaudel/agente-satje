@@ -1,0 +1,16 @@
+{
+  "numeroCausa": "",
+  "actor": {
+    "cedulaActor": "0100000000",
+    "nombreActor": ""
+  },
+  "demandado": {
+    "cedulaDemandado": "",
+    "nombreDemandado": ""
+  },
+  "provincia": "",
+  "numeroFiscalia": "",
+  "recaptcha": "verdad",
+  "first": 1,
+  "pageSize": 10
+}

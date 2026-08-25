@@ -1,0 +1,12 @@
+{
+  "name": "satje-aws-lambda-connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "zip": "zip -r satje-aws-lambda-connector.zip index.mjs package.json"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

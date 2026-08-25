@@ -1,0 +1,34 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/01371201700497/actuaciones/159075756/documentos",
+    "headers": {
+      "X-API-Key": "{{ECUADOR_JUDICIAL_API_KEY}}"
+    }
+  },
+  "response": {
+    "success": true,
+    "source": "SATJE",
+    "mode": "fixture",
+    "retrievedAt": "2026-07-14T14:16:21.896431+00:00",
+    "idJuicio": "01371201700497",
+    "codigoActuacion": "159075756",
+    "total": 1,
+    "data": [
+      {
+        "documentoId": "doc_MDFkNGRiMDgtNWZkZi00Yzk0LWExZDktMTU4Y2RlYzdhNzdh",
+        "nombre": "HBA01",
+        "nombreArchivo": "01371201700497_125504102_16_16_14_P20.pdf",
+        "tipo": "application/pdf",
+        "disponible": true,
+        "codigoActuacion": 159075756,
+        "fechaActuacion": "2020-06-11T21:16:10.000+00:00"
+      }
+    ],
+    "requestId": "req_ejemplo",
+    "cache": {
+      "hit": false,
+      "ttlSeconds": 300
+    }
+  }
+}

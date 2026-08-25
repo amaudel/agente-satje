@@ -1,0 +1,9 @@
+{
+  "actorSpecification": 1,
+  "name": "satje-live-diagnostic",
+  "title": "SATJE Live Diagnostic",
+  "version": "0.1",
+  "buildTag": "latest",
+  "environmentVariables": {},
+  "dockerfile": "../Dockerfile"
+}

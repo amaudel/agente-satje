@@ -1,0 +1,337 @@
+{
+  "success": true,
+  "source": "SATJE",
+  "mode": "live",
+  "retrievedAt": "2026-07-20T17:45:00Z",
+  "idJuicio": "01371201700497",
+  "total": 20,
+  "data": [
+    {
+      "codigoActuacion": 159075756,
+      "fecha": "2020-06-11T21:16:10.000+00:00",
+      "tipo": "ENVIO DEL PROCESO AL ARCHIVO GENERAL (RAZON)",
+      "actividad": "RAZON: SE ENVIA EL PROCESO AL ARCHIVO.-CERTIFICO.-CUENCA, 11 DE JUNIO DEL 2020.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_MDFkNGRiMDgtNWZkZi00Yzk0LWExZDktMTU4Y2RlYzdhNzdh",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 131051598,
+      "fecha": "2018-06-27T15:12:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: Siento como tal que el día de hoy se envia el proceso al archivo general.- Cuenca, 27 de junio del 2018.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_YjZmNTA0ODEtNTlmMS00ZDg3LWIyYjQtZDUyNjUwYTA1MWJj",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 130543688,
+      "fecha": "2018-06-15T14:12:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: En esta fecha procedo a enviar el proceso al archivo central.- Cuenca, 15 de junio del 2018.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_MDcwNWYzYjUtOWUzOC00ZTljLWIwOTYtN2NlZWRhMmY5NGQ4",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 130529490,
+      "fecha": "2018-06-14T21:58:21.110+00:00",
+      "tipo": "ARCHIVO DEL PROCESO (RAZON DE NOTIFICACION)",
+      "actividad": "En Cuenca, jueves catorce de junio del dos mil dieciocho, a partir de las dieciseis horas y cincuenta y seis minutos, mediante boletas judiciales notifiqué con la providencia que antecede a: GONZALEZ SUMBA STEPHANIE CATALINA en la casilla No. 447 y correo electrónico eguerra@etapanet.net, en el casillero electrónico No. 0300927779 del Dr./Ab. VINICIO ESTEBAN GUERRA ALVARADO; en la casilla No. 9999 y correo electrónico priscilaguerraestevez@gmail.com. COMPAÑIA TITANMAX S.A. ( RAFAEL ALBERTO GO...",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_NmM3NGQyN2QtMTVhMi00M2UwLTg1NzgtZjZjODdhMmJmYTk2",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 130529490,
+      "fecha": "2018-06-14T21:13:00.000+00:00",
+      "tipo": "ARCHIVO DEL PROCESO (AUTO INTERLOCUTORIO)",
+      "actividad": "Cuenca, jueves 14 de junio del 2018, las 16h13, JUICIO NO. 00497 - 2017\nCuenca 14 de junio de 2018, a las 16H00.\nVISTOS: Con la razón sentada por la actuaria del despacho y toda vez que se ha acreditado la extinción de la obligación liquidada en el mandamiento de ejecución, se resuelve cancelar y levantar todas las providencia preventivas y/o embargo que se hubieren dictado dentro del proceso; Por lo expuesto y en atención a lo previsto en el artículo 395 del Código Orgánico General de Proces...",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_Nzk2MzVjZWMtMzY3Yy00OTAzLTliYzctY2UwMGJjNTZlMDc2",
+      "criterioCoincidencia": [
+        "sentencia",
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "alto",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 130161967,
+      "fecha": "2018-06-07T14:12:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: en esta fecha se devuelve el proceso al archivo central.- Cuenca, 7 de junio del 2018. sma",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_YzFmZmU3ZDYtZjc3ZS00OTM5LWE0YzYtZDQ1NDllYzcxMDIy",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 130037621,
+      "fecha": "2018-06-05T15:05:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: En esta fecha de envía el proceso al archivo central.- Cuenca, 5 de junio del 2018. sma",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_NDRhZjE5NWYtY2FiNi00MTQ4LWExMjAtYjQwMWEyYjRmNTcx",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 129710950,
+      "fecha": "2018-05-29T14:21:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: Siento como tal que el día de hoy se envia el proceso al archivo general.- Cuenca, 29 de mayo del 2018.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_MGYyNTM3ZjAtOGEzYS00OWJjLWE1YjUtN2E5OWMzMDlmNjI2",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 128882553,
+      "fecha": "2018-05-09T17:12:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "Razón: Siento como tal que el día de hoy procedo a devolver el proceso al archivo central. Certifico.-Cuenca, 09 de mayo del 2018",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_NTY4MTQyZTMtOTVlYS00YTk2LThlMzEtNjc2MDAwZGIyMDhi",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 128510679,
+      "fecha": "2018-05-02T14:41:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: En esta fecha procedo a enviar al archivo general el proceso.- Certifico.- Cuenca, 2 de mayo del 2017. sma",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_MGU2Nzk1YTgtZjgxOC00YWY2LTg3OTgtZWVjMzRkZmFhMTg5",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 127632976,
+      "fecha": "2018-04-10T15:10:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "Razón: Siento como tal que el día de hoy procedo a devolver el proceso al archivo central. Certifico.-Cuenca, 10 de abril del 2018",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_OTYyMzgyODY",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 127315528,
+      "fecha": "2018-04-03T14:43:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "Razón: Siento como tal que el día de hoy procedo a devolver el proceso al archivo central. Certifico.-Cuenca, 03 de abril del 2018",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_OTUwNzE2NjU",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 126651089,
+      "fecha": "2018-03-16T19:31:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "Razón: Siento como tal que en esta fecha se remite el proceso al Archivo General.- Certifico\nCuenca, 16 de marzo de 2018",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_OTI1OTUwODk",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 126261777,
+      "fecha": "2018-03-08T17:23:00.000+00:00",
+      "tipo": "NULIDAD POR FALTA DE NOTIFICACION (AUTO INTERLOCUTORIO)",
+      "actividad": "Cuenca, jueves 8 de marzo del 2018, las 12h23, JUICIO NO. 00497-2017\nCuenca 08 de Marzo de 2018, a las 08H00.\nVISTOS: En lo principal: Atenta a lo solicitado por la parte actora, revisado el auto inmediato anterior se observa que efectivamente la suscrita no hizo constar el nombre correcto y completo de quien debía pagar y cumplir con el Auto de mandamiento de ejecución, en base a ello y siendo que en este sentido la entidad demandada en la forma en la que se lo requirió y fue sentenciada no...",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_OTExMTAxODY",
+      "criterioCoincidencia": [
+        "sentencia",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "alto",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 125542897,
+      "fecha": "2018-02-20T16:48:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: SIENTO COMO TAL QUE EL DIA DE HOY ENVIO EL PROCESO AL ARCHIVO .- CUENCA, 20 DE FEBRERO DEL 2018.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_ODgzOTMwMDg",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 124931792,
+      "fecha": "2018-02-02T14:06:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: Siento como tal que el día de hoy se envia el proceso al archivo general.- Cuenca, 02 de febrero del 2018.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_ODYxNDM3MzU",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 124928503,
+      "fecha": "2018-02-02T13:22:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: Siento como tal que el día de hoy se envia el proceso al archivo general.- Cuenca, 02 de febrero del 2018.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_ODYxMzIwNzg",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 124514088,
+      "fecha": "2018-01-24T15:30:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON.- Siento como tal que hoy remito el proceso , al ARCHIVO GENERAL.- Certifico- Cuenca, 24 de enero 2018.",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_ODQ1OTkzOTM",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 124314797,
+      "fecha": "2018-01-18T21:25:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "Razón: Siento por tal que en esta fecha se envió el proceso al archivo general .- Certifico\nCuenca, Jueves 18 de Enero del 2018",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_ODM4NTc5MDY",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    },
+    {
+      "codigoActuacion": 124169442,
+      "fecha": "2018-01-16T17:25:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "Razón: Siento por tal que en esta fecha se envió el proceso al archivo general .- Certifico\nCuenca, Martes 16 de Enero del 2018",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "tieneDocumento": true,
+      "cantidadDocumentos": 1,
+      "documentoId": "doc_ODMzMDQ2MTY",
+      "criterioCoincidencia": [
+        "archivo",
+        "documento_adjunto"
+      ],
+      "nivelConfianza": "medio",
+      "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+    }
+  ],
+  "partialErrors": [],
+  "requestId": "req_ejemplo",
+  "cache": {
+    "hit": true,
+    "ttlSeconds": 86400
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/01371201700497/resoluciones?limit=20",
+    "headers": {
+      "X-API-Key": "{{ECUADOR_JUDICIAL_API_KEY}}"
+    }
+  },
+  "response": {
+    "success": true,
+    "source": "SATJE",
+    "mode": "fixture",
+    "retrievedAt": "2026-07-20T14:45:00Z",
+    "idJuicio": "01371201700497",
+    "total": 1,
+    "data": [
+      {
+        "codigoActuacion": 159075756,
+        "fecha": "2020-06-11T21:16:10.000+00:00",
+        "tipo": "SENTENCIA",
+        "actividad": "Sentencia cargada al expediente. Ejemplo documental; revisar el PDF antes de afirmar contenido.",
+        "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+        "tieneDocumento": true,
+        "cantidadDocumentos": 1,
+        "documentoId": "doc_MDFkNGRiMDgtNWZkZi00Yzk0LWExZDktMTU4Y2RlN2E3N2E",
+        "criterioCoincidencia": [
+          "sentencia",
+          "documento_adjunto"
+        ],
+        "nivelConfianza": "alto",
+        "advertencia": "Candidata por metadatos SATJE; no afirma contenido de sentencia sin revisar el documento."
+      }
+    ],
+    "partialErrors": [],
+    "requestId": "req_ejemplo",
+    "cache": {
+      "hit": false,
+      "ttlSeconds": 300
+    }
+  }
+}

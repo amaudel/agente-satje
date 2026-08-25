@@ -1,0 +1,21 @@
+{
+  "name": "agente-satje",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-11-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "account_id": "783d1eefeff0860c9c1919242f891c93",
+  "workers_dev": true,
+
+  "routes": [
+    {
+      "pattern": "agente.asitentekairon.cloud",
+      "custom_domain": true,
+      "zone_name": "asitentekairon.cloud"
+    }
+  ],
+
+  "vars": {
+    "SATJE_API_BASE_URL": "https://api.asitentekairon.cloud",
+    "ENVIRONMENT": "production"
+  }
+}

@@ -1,0 +1,10 @@
+[Unit]
+Description=SATJE production alert checks
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/ubuntu/.openclaw/workspace/projects/ecuador-judicial-api
+EnvironmentFile=/home/ubuntu/.openclaw/workspace/projects/ecuador-judicial-api/.env
+ExecStart=/home/ubuntu/.openclaw/workspace/projects/ecuador-judicial-api/.venv/bin/python /home/ubuntu/.openclaw/workspace/projects/ecuador-judicial-api/scripts/satje_alert_check.py

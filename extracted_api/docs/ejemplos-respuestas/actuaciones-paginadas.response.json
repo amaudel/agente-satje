@@ -1,0 +1,243 @@
+{
+  "success": true,
+  "source": "SATJE",
+  "mode": "live",
+  "retrievedAt": "2026-07-20T17:45:00Z",
+  "idJuicio": "01371201700497",
+  "pagination": {
+    "page": 1,
+    "pageSize": 20,
+    "totalItems": 159,
+    "totalPages": 8,
+    "hasNext": true,
+    "hasPrevious": false
+  },
+  "data": [
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 159075756,
+      "fecha": "2020-06-11T21:16:10.000+00:00",
+      "tipo": "ENVIO DEL PROCESO AL ARCHIVO GENERAL (RAZON)",
+      "actividad": "RAZON: SE ENVIA EL PROCESO AL ARCHIVO.-CERTIFICO.-CUENCA, 11 DE JUNIO DEL 2020.",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 131051598,
+      "fecha": "2018-06-27T15:12:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: Siento como tal que el día de hoy se envia el proceso al archivo general.- Cuenca, 27 de junio del 2018.",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 131022282,
+      "fecha": "2018-06-26T20:35:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: En esta fecha comparece la Abda. Priscila Adriana Guerra Estevez, con número de matrícula 01-2017-118, y se hace cargo de la documentación adjuntada a la demanda constante en veinte y tres fojas (fojas 1 a fojas 23 de los autos), mismas que se devuelven en cumplimiento a lo ordenado en providencia inmediata anterior; para constancia, firma en junta de la secretaria que certifica.\nCuenca, 26 de junio de 2018",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130543688,
+      "fecha": "2018-06-15T14:12:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: En esta fecha procedo a enviar el proceso al archivo central.- Cuenca, 15 de junio del 2018.",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130529490,
+      "fecha": "2018-06-14T21:58:21.110+00:00",
+      "tipo": "ARCHIVO DEL PROCESO (RAZON DE NOTIFICACION)",
+      "actividad": "En Cuenca, jueves catorce de junio del dos mil dieciocho, a partir de las dieciseis horas y cincuenta y seis minutos, mediante boletas judiciales notifiqué con la providencia que antecede a: GONZALEZ SUMBA STEPHANIE CATALINA en la casilla No. 447 y correo electrónico eguerra@etapanet.net, en el casillero electrónico No. 0300927779 del Dr./Ab. VINICIO ESTEBAN GUERRA ALVARADO; en la casilla No. 9999 y correo electrónico priscilaguerraestevez@gmail.com. COMPAÑIA TITANMAX S.A. ( RAFAEL ALBERTO GONZALEZ CEDILLO) en la casilla No. 9999 y correo electrónico ab.mmayorga63@gmail.com. QUITO JARA JOSE HUMBERTO en el correo electrónico joseqj123@hotmail.com; REINOSO JAUREGUI JHONNY GUSTAVO en el correo electrónico jhonnygustavoreinosos62@hotmail.com. Certifico:",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130529490,
+      "fecha": "2018-06-14T21:13:00.000+00:00",
+      "tipo": "ARCHIVO DEL PROCESO (AUTO INTERLOCUTORIO)",
+      "actividad": "Cuenca, jueves 14 de junio del 2018, las 16h13, JUICIO NO. 00497 - 2017\nCuenca 14 de junio de 2018, a las 16H00.\nVISTOS: Con la razón sentada por la actuaria del despacho y toda vez que se ha acreditado la extinción de la obligación liquidada en el mandamiento de ejecución, se resuelve cancelar y levantar todas las providencia preventivas y/o embargo que se hubieren dictado dentro del proceso; Por lo expuesto y en atención a lo previsto en el artículo 395 del Código Orgánico General de Procesos, se declara la conclusión y el archivo del proceso. En base a lo dispuesto por el artículo 196 último inciso “ Una vez que la sentencia haya sido ejecutada, se comunicará a las partes su obligación de retirar los documentos agregados al proceso, advirtiendo que en caso de no hacerlo en el término de treinta días, estos serán destruidos.” Por tanto se comunica a las partes procesales que retiren los documentos que hayan adjuntado a este proceso en el término de treinta días. Cumplido con dicho término, la actuaria del despacho destruya los documentos que no hayan sido retirados.- NOTIFÍQUESE Y CÚMPLASE.-",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130513825,
+      "fecha": "2018-06-14T19:07:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: Siento como tal que el día de hoy se pasa el proceso para el despacho.- Cuenca, 14 de junio del 2018.",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130466052,
+      "fecha": "2018-06-13T20:51:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: SIENTO COMO TAL QUE EL DIA DE HOY SE ENTREGAN LAS PAPELETAS DE RETIRO A LA SEÑORITA CATALINA GONZALEZ SUMBA POR EL VALOR DE $9.233,32 DOLARES Y AL ABOGADO DR. ESTEBAN GUERRA ALVARADO EL VALOR DE $ 909,70 DOLARES POR HONORARIOS PROFESIONALES.-CUENCA, 13 DE JUNIO DEL 2018.\nABG. DIANA LEON V.\nSECRETARIA",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130404709,
+      "fecha": "2018-06-12T21:52:07.690+00:00",
+      "tipo": "ATENDER PETICION (RAZON DE NOTIFICACION)",
+      "actividad": "En Cuenca, martes doce de junio del dos mil dieciocho, a partir de las dieciseis horas y cincuenta minutos, mediante boletas judiciales notifiqué con la providencia que antecede a: GONZALEZ SUMBA STEPHANIE CATALINA en la casilla No. 447 y correo electrónico eguerra@etapanet.net, en el casillero electrónico No. 0300927779 del Dr./Ab. VINICIO ESTEBAN GUERRA ALVARADO; en la casilla No. 9999 y correo electrónico priscilaguerraestevez@gmail.com. COMPAÑIA TITANMAX S.A. ( RAFAEL ALBERTO GONZALEZ CEDILLO) en la casilla No. 9999 y correo electrónico ab.mmayorga63@gmail.com. QUITO JARA JOSE HUMBERTO en el correo electrónico joseqj123@hotmail.com; REINOSO JAUREGUI JHONNY GUSTAVO en el correo electrónico jhonnygustavoreinosos62@hotmail.com. Certifico:",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130404709,
+      "fecha": "2018-06-12T21:19:00.000+00:00",
+      "tipo": "ATENDER PETICION (AUTO DE SUSTANCIACION)",
+      "actividad": "Cuenca, martes 12 de junio del 2018, las 16h19, Juicio 00497-2017\nCuenca 12 de junio de 2018, las 16h16.\nAgréguese el escrito y documentación que remite BanEcuador. En base al Artículo 378 del COGEP se ordena que se entregue la papeleta de retiro a nombre de la actora, y de quien corresponda - Notifíquese.",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 36490780,
+      "fecha": "2018-06-11T20:28:16.000+00:00",
+      "tipo": "ESCRITO",
+      "actividad": "ANEXOS, Escrito, FePresentacion",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130161967,
+      "fecha": "2018-06-07T14:12:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: en esta fecha se devuelve el proceso al archivo central.- Cuenca, 7 de junio del 2018. sma",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130117830,
+      "fecha": "2018-06-06T17:20:46.097+00:00",
+      "tipo": "ATENDER PETICION (RAZON DE NOTIFICACION)",
+      "actividad": "En Cuenca, miércoles seis de junio del dos mil dieciocho, a partir de las doce horas y diecinueve minutos, mediante boletas judiciales notifiqué con la providencia que antecede a: GONZALEZ SUMBA STEPHANIE CATALINA en la casilla No. 447 y correo electrónico eguerra@etapanet.net, en el casillero electrónico No. 0300927779 del Dr./Ab. VINICIO ESTEBAN GUERRA ALVARADO; en la casilla No. 9999 y correo electrónico priscilaguerraestevez@gmail.com. COMPAÑIA TITANMAX S.A. ( RAFAEL ALBERTO GONZALEZ CEDILLO) en la casilla No. 9999 y correo electrónico ab.mmayorga63@gmail.com. QUITO JARA JOSE HUMBERTO en el correo electrónico joseqj123@hotmail.com; REINOSO JAUREGUI JHONNY GUSTAVO en el correo electrónico jhonnygustavoreinosos62@hotmail.com. Certifico:",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130117830,
+      "fecha": "2018-06-06T16:44:00.000+00:00",
+      "tipo": "ATENDER PETICION (AUTO DE SUSTANCIACION)",
+      "actividad": "Cuenca, miércoles 6 de junio del 2018, las 11h44, Juicio N.- 497-2017\nCuenca, 6 de junio del 2018.- Las 09h20\nAdjúntese a los autos los oficios remitidos por las entidades bancarias, en cuenta su contenido. Por licencia de la Secretaria del Juzgado, actúe como Secretaria Temporal la Dra. Sonia Márquez Aguilar.- NOTIFÍQUESE Y CÚMPLASE.-",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 36408724,
+      "fecha": "2018-06-05T16:42:52.000+00:00",
+      "tipo": "OFICIO",
+      "actividad": "Oficio, FePresentacion",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 130037621,
+      "fecha": "2018-06-05T15:05:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: En esta fecha de envía el proceso al archivo central.- Cuenca, 5 de junio del 2018. sma",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 36403185,
+      "fecha": "2018-06-05T14:09:20.000+00:00",
+      "tipo": "OFICIO",
+      "actividad": "Oficio, FePresentacion",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 129979913,
+      "fecha": "2018-06-04T15:53:00.000+00:00",
+      "tipo": "RAZON (RAZON)",
+      "actividad": "RAZON: En esta fecha se da cumplimiento a lo ordenado en providencia inmediata anterior, remitiendo oficio N° 91-2018 (cas. 447). Certifico.\nCuenca, 04 de junio de 2018\nm.v.",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 129979536,
+      "fecha": "2018-06-04T15:52:00.000+00:00",
+      "tipo": "OFICIO (OFICIO)",
+      "actividad": "REPUBLICA DEL ECUDOR\nUNIDAD JUDICIAL DE TRABAJO DE CUENCA\nOficio N° 91-2018- UJTC\nCuenca, 04 de junio del 2018\nSeñores\nBAN ECUADOR\nDe mi consideración:\nEn el proceso Nro. 01371-2017-00497 propuesto por GONZALEZ SUMBA STEPHANIE CATALINA, con cédula de identidad N°01042270855, en contra de RAFAEL ALBERTO GONZALEZ CEDILLO, con cédula de identidad N° 0910796879, representante de la compañía TITANMAX S.A., con RUC N° 0992746092001; solicito, se sirvan dar cumplimiento a la providencia que ha continuación transcribo:\nJuicio 00497-2017.\nCuenca, 23 de mayo del 2018. Las 11h00\nAgréguese el escrito presentado por el actor. Una vez revisado el oficio remitido por el Banco Internacional, se observa que el valor se encuentra transferido a la cuenta de Depósitos Judiciales, cuenta general de la Función Judicial. Por tanto se dispone que por secretaría se oficie a BanEcuador a fin de que realice la transferencia a la cuenta 1010314001 cuya denominación es Unidad Judicial de Trabajo, sede Cuenca, provincia del Azuay, se adjuntará el oficio del Banco Internacional. Se comunicará el cumplimento de ello a este Juzgado.-Notifíquese.\nEspecificando que, el valor que debe transferirse a la cuenta de l...",
+      "tieneDocumento": true
+    },
+    {
+      "idIncidenteJudicatura": 20181767,
+      "incidente": 1,
+      "idJudicatura": "01371",
+      "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+      "codigoActuacion": 129890644,
+      "fecha": "2018-05-31T22:09:03.587+00:00",
+      "tipo": "ATENDER PETICION (RAZON DE NOTIFICACION)",
+      "actividad": "En Cuenca, jueves treinta y uno de mayo del dos mil dieciocho, a partir de las diecisiete horas y siete minutos, mediante boletas judiciales notifiqué con la providencia que antecede a: GONZALEZ SUMBA STEPHANIE CATALINA en la casilla No. 447 y correo electrónico eguerra@etapanet.net, en el casillero electrónico No. 0300927779 del Dr./Ab. VINICIO ESTEBAN GUERRA ALVARADO; en la casilla No. 9999 y correo electrónico priscilaguerraestevez@gmail.com. COMPAÑIA TITANMAX S.A. ( RAFAEL ALBERTO GONZALEZ CEDILLO) en la casilla No. 9999 y correo electrónico ab.mmayorga63@gmail.com. QUITO JARA JOSE HUMBERTO en el correo electrónico joseqj123@hotmail.com; REINOSO JAUREGUI JHONNY GUSTAVO en el correo electrónico jhonnygustavoreinosos62@hotmail.com. Certifico:",
+      "tieneDocumento": true
+    }
+  ],
+  "partialErrors": [],
+  "requestId": "req_ejemplo",
+  "cache": {
+    "hit": true,
+    "ttlSeconds": 86400
+  }
+}

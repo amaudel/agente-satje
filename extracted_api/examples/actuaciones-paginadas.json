@@ -1,0 +1,43 @@
+{
+  "request": {
+    "method": "GET",
+    "url": "{{ECUADOR_JUDICIAL_API_URL}}/api/v1/causas/01371201700497/actuaciones/paginadas?page=1&pageSize=20&orden=desc",
+    "headers": {
+      "X-API-Key": "{{ECUADOR_JUDICIAL_API_KEY}}"
+    }
+  },
+  "response": {
+    "success": true,
+    "source": "SATJE",
+    "mode": "fixture",
+    "retrievedAt": "2026-07-20T14:45:00Z",
+    "idJuicio": "01371201700497",
+    "pagination": {
+      "page": 1,
+      "pageSize": 20,
+      "totalItems": 159,
+      "totalPages": 8,
+      "hasNext": true,
+      "hasPrevious": false
+    },
+    "data": [
+      {
+        "idIncidenteJudicatura": 20181767,
+        "incidente": 1,
+        "idJudicatura": "01371",
+        "nombreJudicatura": "UNIDAD JUDICIAL DE TRABAJO CUENCA",
+        "codigoActuacion": 159075756,
+        "fecha": "2020-06-11T21:16:10.000+00:00",
+        "tipo": "ENVIO DEL PROCESO AL ARCHIVO GENERAL (RAZON)",
+        "actividad": "RAZON: SE ENVIA EL PROCESO AL ARCHIVO.",
+        "tieneDocumento": true
+      }
+    ],
+    "partialErrors": [],
+    "requestId": "req_ejemplo",
+    "cache": {
+      "hit": false,
+      "ttlSeconds": 300
+    }
+  }
+}

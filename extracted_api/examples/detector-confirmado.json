@@ -1,0 +1,23 @@
+{
+  "estado": "confirmado",
+  "resultado": {
+    "acto": "EMBARGO",
+    "fechaInscripcion": "2026-01-15",
+    "razonInscripcion": "900001",
+    "numeroRepertorio": "20001",
+    "fechaRepertorio": "2026-01-12"
+  },
+  "evidencia": {
+    "documentoId": "doc_aGJhLWNvZGUtMQ",
+    "nombreArchivo": "Registro_Propiedad.pdf",
+    "pagina": 2,
+    "textoSoporte": "El acto de EMBARGO queda inscrito el 15 de enero de 2026. Razon de Inscripcion 900001. Repertorio 20001.",
+    "metodoExtraccion": "ocr",
+    "calidadExtraccion": "alta"
+  },
+  "source": "SATJE",
+  "mode": "live",
+  "retrievedAt": "2026-07-14T15:30:00+00:00",
+  "requestId": "req_ejemplo",
+  "notaAnonimizacion": "Todos los valores son ficticios y sirven exclusivamente para pruebas."
+}

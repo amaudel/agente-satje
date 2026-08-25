@@ -1,0 +1,10 @@
+.env
+.env.staging
+.satje-lambda.env
+.satje-lambda-output.env
+.satje-cloudflare.env
+.satje-cloudflare-output.env
+.venv/
+__pycache__/
+*.pyc
+*.sqlite3
