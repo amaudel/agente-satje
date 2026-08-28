@@ -1,6 +1,12 @@
 import type { VercelRequest, VercelResponse } from "@vercel/node";
 import OpenAI from "openai";
-import { CATEGORIAS_INDICADORES, extraerAsuntoDeCaratula, filtrarCandidatosReinicio } from "../lib/legal-analysis.js";
+import {
+  CATEGORIAS_INDICADORES,
+  extraerAsuntoDeCaratula,
+  filtrarCandidatosReinicio,
+  seleccionarJuicioVigente,
+  type CausaConEstado,
+} from "../lib/legal-analysis.js";
 import { procesarCausaIndividual } from "../lib/procesar-causa.js";
 import { generarDashboardHTML } from "../lib/dashboard-html.js";
 import { upsertUpstashVector, queryUpstashVector } from "../lib/upstash.js";
@@ -240,6 +246,99 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       } catch (errReinicio: any) {
         return res.status(500).json({ ok: false, error: errReinicio?.message || String(errReinicio) });
       }
+    }
+
+    // 2c. CONSULTA EN LOTE TIPO SUPERVISOR (por cedula, no por numero de causa)
+    // Recibe una lista de personas (cedula, nombres, apellidos, numero de
+    // operacion interno de la cooperativa) y para cada una busca todas sus
+    // causas en SATJE, determina cual es "el ultimo juicio vigente" (excluye
+    // sentenciadas y abandonadas) y arma una fila lista para exportar a Excel
+    // y migrar al sistema de gestion legal.
+    if (req.query.action === "lote-supervisor" || bodyData.action === "lote-supervisor") {
+      const personas: any[] = Array.isArray(bodyData.personas) ? bodyData.personas : [];
+      if (personas.length === 0) {
+        return res.status(400).json({ ok: false, error: "No se recibieron personas para la consulta en lote." });
+      }
+
+      const baseUrl = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKey = process.env.SATJE_API_KEY;
+      if (!apiKey) return res.status(500).json({ ok: false, error: "SATJE_API_KEY no esta configurado en el servidor." });
+      const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json", "X-API-Key": apiKey };
+
+      const filas = await Promise.all(
+        personas.map(async (persona: any) => {
+          const cedula = String(persona?.cedula || "").trim();
+          const nombres = String(persona?.nombres || "").trim();
+          const apellidos = String(persona?.apellidos || "").trim();
+          const numeroOperacion = String(persona?.numeroOperacion || "").trim();
+
+          const filaBase = { cedula, nombres, apellidos, numeroOperacion };
+
+          if (!cedula) {
+            return { ...filaBase, error: "Falta cedula." };
+          }
+
+          try {
+            const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
+              method: "POST",
+              headers,
+              body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+            });
+            if (!resBuscar.ok) {
+              return { ...filaBase, error: `No se pudo buscar causas por cedula (HTTP ${resBuscar.status}).` };
+            }
+            const buscarData: any = await resBuscar.json();
+            const causasEncontradas: any[] = Array.isArray(buscarData?.data) ? buscarData.data : [];
+
+            if (causasEncontradas.length === 0) {
+              return { ...filaBase, totalCausasEncontradas: 0, sinCausaVigente: true };
+            }
+
+            const detalles = await Promise.all(
+              causasEncontradas.map((c: any) => procesarCausaIndividual(c.numeroProceso || c.idJuicio, baseUrl, apiKey))
+            );
+
+            const causasConEstado: CausaConEstado[] = causasEncontradas.map((c: any, idx: number) => ({
+              idJuicio: c.idJuicio,
+              numeroProceso: c.numeroProceso,
+              fechaIngreso: c.fechaIngreso,
+              poseeSentencia: !!detalles[idx]?.poseeSentencia,
+              nivelAbandono: detalles[idx]?.alertaAbandonoObjeto?.nivel || "normal",
+            }));
+
+            const vigente = seleccionarJuicioVigente(causasConEstado);
+            if (!vigente) {
+              return { ...filaBase, totalCausasEncontradas: causasEncontradas.length, sinCausaVigente: true };
+            }
+
+            const idxVigente = causasConEstado.findIndex((c) => c.idJuicio === vigente.idJuicio);
+            const detalleVigente = detalles[idxVigente];
+
+            return {
+              ...filaBase,
+              totalCausasEncontradas: causasEncontradas.length,
+              sinCausaVigente: false,
+              numeroProceso: vigente.numeroProceso,
+              etapaProcesalGeneral: detalleVigente?.etapaProcesalGeneral,
+              etapaProcesalEspecifica: detalleVigente?.etapaProcesalEspecifica,
+              fechaInscripcionMedidaCautelar: detalleVigente?.fechaInscripcionMedida || null,
+              // Campos pedidos por el requerimiento que el agente aun no calcula:
+              // no se distingue rol deudor/garante ni se extrae fecha de
+              // calificacion de deprecatorio. Se exponen explicitos como no
+              // disponibles en vez de omitirlos u ocultar el hueco.
+              unidadJudicialDeprecadaDeudor: null,
+              fechaCalificacionDeprecatorioDeu: null,
+              unidadJudicialDeprecadaGarante: null,
+              fechaCalificacionDeprecatorioGar: null,
+              fechaDeEtapa: null,
+            };
+          } catch (errPersona: any) {
+            return { ...filaBase, error: errPersona?.message || String(errPersona) };
+          }
+        })
+      );
+
+      return res.status(200).json({ ok: true, total: filas.length, filas });
     }
 
     let causasRaw = "";

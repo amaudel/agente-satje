@@ -9,6 +9,7 @@ import {
   calcularAlertaAbandonoProcesal,
   extraerAsuntoDeCaratula,
   filtrarCandidatosReinicio,
+  seleccionarJuicioVigente,
 } from "./legal-analysis.js";
 
 function actuacion(overrides: Record<string, any> = {}) {
@@ -456,5 +457,56 @@ describe("filtrarCandidatosReinicio", () => {
       causaActual
     );
     assert.deepEqual(candidatos.map((c) => c.idJuicio), ["B", "A"]);
+  });
+});
+
+describe("seleccionarJuicioVigente", () => {
+  function causaEstado(overrides: Record<string, any> = {}) {
+    return {
+      idJuicio: "X",
+      numeroProceso: "X-2022-00001",
+      fechaIngreso: "2022-01-01",
+      poseeSentencia: false,
+      nivelAbandono: "normal",
+      ...overrides,
+    };
+  }
+
+  test("devuelve null si la lista esta vacia", () => {
+    assert.equal(seleccionarJuicioVigente([]), null);
+  });
+
+  test("devuelve null si todas las causas estan abandonadas", () => {
+    const resultado = seleccionarJuicioVigente([
+      causaEstado({ idJuicio: "A", nivelAbandono: "abandonada" }),
+      causaEstado({ idJuicio: "B", nivelAbandono: "abandonada" }),
+    ]);
+    assert.equal(resultado, null);
+  });
+
+  test("devuelve null si todas las causas tienen sentencia", () => {
+    const resultado = seleccionarJuicioVigente([
+      causaEstado({ idJuicio: "A", poseeSentencia: true }),
+      causaEstado({ idJuicio: "B", poseeSentencia: true }),
+    ]);
+    assert.equal(resultado, null);
+  });
+
+  test("excluye abandonadas y sentenciadas, elige la mas reciente entre las que quedan", () => {
+    const resultado = seleccionarJuicioVigente([
+      causaEstado({ idJuicio: "vieja-activa", fechaIngreso: "2021-01-01" }),
+      causaEstado({ idJuicio: "abandonada", fechaIngreso: "2023-06-01", nivelAbandono: "abandonada" }),
+      causaEstado({ idJuicio: "sentenciada", fechaIngreso: "2023-01-01", poseeSentencia: true }),
+      causaEstado({ idJuicio: "activa-reciente", fechaIngreso: "2022-06-01" }),
+    ]);
+    assert.equal(resultado?.idJuicio, "activa-reciente");
+  });
+
+  test("una causa sin fechaIngreso no gana sobre una con fecha si hay otra opcion valida", () => {
+    const resultado = seleccionarJuicioVigente([
+      causaEstado({ idJuicio: "sin-fecha", fechaIngreso: null }),
+      causaEstado({ idJuicio: "con-fecha", fechaIngreso: "2022-01-01" }),
+    ]);
+    assert.equal(resultado?.idJuicio, "con-fecha");
   });
 });

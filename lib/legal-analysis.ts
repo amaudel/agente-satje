@@ -724,3 +724,27 @@ export function filtrarCandidatosReinicio(
     })
     .sort((a, b) => new Date(b.fechaIngreso!).getTime() - new Date(a.fechaIngreso!).getTime());
 }
+
+// Para la revision en lote tipo supervisor: dada la lista completa de causas
+// de una persona (con su estado ya calculado), determina cual es "el ultimo
+// juicio vigente" -- se excluyen las que ya tienen sentencia (Art. 247 COGEP,
+// improcedente el abandono pero el proceso ya termino) y las declaradas en
+// abandono, y de las que quedan se toma la de fecha de ingreso mas reciente.
+export interface CausaConEstado {
+  idJuicio: string;
+  numeroProceso: string;
+  fechaIngreso?: string | null;
+  poseeSentencia: boolean;
+  nivelAbandono: string;
+}
+
+export function seleccionarJuicioVigente(causas: CausaConEstado[]): CausaConEstado | null {
+  const vigentes = causas.filter((c) => !c.poseeSentencia && c.nivelAbandono !== "abandonada");
+  if (vigentes.length === 0) return null;
+
+  return vigentes.reduce((mejor, actual) => {
+    const fechaMejor = mejor.fechaIngreso ? new Date(mejor.fechaIngreso).getTime() : -Infinity;
+    const fechaActual = actual.fechaIngreso ? new Date(actual.fechaIngreso).getTime() : -Infinity;
+    return fechaActual > fechaMejor ? actual : mejor;
+  });
+}

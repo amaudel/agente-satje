@@ -80,22 +80,18 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   <script>
     // FUNCIÓN GLOBAL DE CAMBIO DE PESTAÑAS (INSTANTÁNEA EN HEAD)
     window.selectTab = function(tabName) {
-      var tabIndiv = document.getElementById('tab-individual');
-      var tabLote = document.getElementById('tab-lote');
-      var btnIndiv = document.getElementById('tabBtnIndividual');
-      var btnLote = document.getElementById('tabBtnLote');
-
-      if (tabName === 'individual') {
-        if (tabIndiv) tabIndiv.style.cssText = 'display: block !important;';
-        if (tabLote) tabLote.style.cssText = 'display: none !important;';
-        if (btnIndiv) btnIndiv.classList.add('active');
-        if (btnLote) btnLote.classList.remove('active');
-      } else {
-        if (tabIndiv) tabIndiv.style.cssText = 'display: none !important;';
-        if (tabLote) tabLote.style.cssText = 'display: block !important;';
-        if (btnIndiv) btnIndiv.classList.remove('active');
-        if (btnLote) btnLote.classList.add('active');
-      }
+      var TABS = [
+        { key: 'individual', contentId: 'tab-individual', btnId: 'tabBtnIndividual' },
+        { key: 'lote', contentId: 'tab-lote', btnId: 'tabBtnLote' },
+        { key: 'supervisor', contentId: 'tab-supervisor', btnId: 'tabBtnSupervisor' },
+      ];
+      TABS.forEach(function(t) {
+        var content = document.getElementById(t.contentId);
+        var btn = document.getElementById(t.btnId);
+        var isActive = t.key === tabName;
+        if (content) content.style.cssText = isActive ? 'display: block !important;' : 'display: none !important;';
+        if (btn) { if (isActive) btn.classList.add('active'); else btn.classList.remove('active'); }
+      });
     };
 
     // FUNCIONES DEL WIDGET DE CHAT FLOTANTE (WINDOW SCOPE - COMPUTED STYLE CHECK)
@@ -218,6 +214,117 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       .catch(function(err) {
         out.innerHTML = '⚠️ Error de conexión: ' + err.message;
       });
+    };
+
+    // LOTE SUPERVISOR: busca por cedula (no por numero de causa), determina
+    // el ultimo juicio vigente por persona y arma la tabla para exportar.
+    function parsearFilasSupervisor(texto) {
+      return texto
+        .split(/\\r?\\n/)
+        .map(function(linea) { return linea.trim(); })
+        .filter(Boolean)
+        .map(function(linea) {
+          var partes = linea.indexOf('\\t') !== -1 ? linea.split('\\t') : linea.split(',');
+          partes = partes.map(function(p) { return p.trim(); });
+          return {
+            cedula: partes[0] || '',
+            nombres: partes[1] || '',
+            apellidos: partes[2] || '',
+            numeroOperacion: partes[3] || '',
+          };
+        });
+    }
+
+    window.ejecutarLoteSupervisor = function() {
+      var input = document.getElementById('inputSupervisorLote');
+      var box = document.getElementById('supervisorResultadosBox');
+      if (!input || !box) return;
+
+      var personas = parsearFilasSupervisor(input.value);
+      if (personas.length === 0) {
+        box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--warning);">Pega al menos una fila con cédula.</div>';
+        return;
+      }
+
+      box.innerHTML = '<div class="card" style="padding:1.5rem; text-align:center; color:var(--text-muted);">⏳ Consultando ' + personas.length + ' cédula(s) en SATJE, esto puede tardar...</div>';
+
+      fetch('/?action=lote-supervisor', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'lote-supervisor', personas: personas })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (!res.ok) {
+          box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ ' + (res.error || 'No se pudo completar la consulta.') + '</div>';
+          return;
+        }
+        var filas = res.filas || [];
+        var html = '<div class="batch-card">' +
+          '<div class="batch-header">' +
+            '<div class="batch-title">🗂️ RESULTADO LOTE SUPERVISOR (' + filas.length + ' persona(s))</div>' +
+            '<button class="btn-copy" onclick="exportarCSVTabla(\\'supervisorTable\\', \\'Lote_Supervisor_SATJE.csv\\')">📥 Exportar a CSV / Excel</button>' +
+          '</div>' +
+          '<div class="table-container"><table class="batch-table" id="supervisorTable"><thead><tr>' +
+            '<th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>N° Operación</th>' +
+            '<th>N° Proceso Vigente</th><th>Etapa Procesal General</th><th>Etapa Procesal</th>' +
+            '<th>F. Inscripción Medida Cautelar</th><th>Unidad Judicial Deprecada Deudor</th>' +
+            '<th>Fecha Calificación Deprecatorio DEU</th><th>Unidad Judicial Deprecada Garante</th>' +
+            '<th>Fecha Calificación Deprecatorio GAR</th><th>Fecha de Etapa</th><th>Acción</th>' +
+          '</tr></thead><tbody>';
+
+        filas.forEach(function(f) {
+          if (f.error) {
+            html += '<tr><td>' + f.cedula + '</td><td>' + f.nombres + '</td><td>' + f.apellidos + '</td><td>' + f.numeroOperacion + '</td>' +
+              '<td colspan="10" style="color:var(--danger);">⚠️ ' + f.error + '</td></tr>';
+            return;
+          }
+          if (f.sinCausaVigente) {
+            html += '<tr><td>' + f.cedula + '</td><td>' + f.nombres + '</td><td>' + f.apellidos + '</td><td>' + f.numeroOperacion + '</td>' +
+              '<td colspan="10" style="color:var(--text-muted);">Sin juicio vigente (' + (f.totalCausasEncontradas || 0) + ' causa(s) encontradas, todas cerradas/abandonadas o ninguna causa)</td></tr>';
+            return;
+          }
+          html += '<tr>' +
+            '<td>' + f.cedula + '</td><td>' + f.nombres + '</td><td>' + f.apellidos + '</td><td>' + f.numeroOperacion + '</td>' +
+            '<td><strong>' + (f.numeroProceso || '') + '</strong></td>' +
+            '<td>' + (f.etapaProcesalGeneral || 'No disponible') + '</td>' +
+            '<td style="font-size:0.85rem;">' + (f.etapaProcesalEspecifica || 'No disponible') + '</td>' +
+            '<td>' + (f.fechaInscripcionMedidaCautelar || 'No confirmada') + '</td>' +
+            '<td>' + (f.unidadJudicialDeprecadaDeudor || 'No disponible') + '</td>' +
+            '<td>' + (f.fechaCalificacionDeprecatorioDeu || 'No disponible') + '</td>' +
+            '<td>' + (f.unidadJudicialDeprecadaGarante || 'No disponible') + '</td>' +
+            '<td>' + (f.fechaCalificacionDeprecatorioGar || 'No disponible') + '</td>' +
+            '<td>' + (f.fechaDeEtapa || 'No disponible') + '</td>' +
+            '<td><a href="/?causa=' + encodeURIComponent(f.numeroProceso || '') + '" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>' +
+          '</tr>';
+        });
+
+        html += '</tbody></table></div></div>';
+        box.innerHTML = html;
+      })
+      .catch(function(err) {
+        box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ Error de conexión: ' + err.message + '</div>';
+      });
+    };
+
+    window.exportarCSVTabla = function(tableId, nombreArchivo) {
+      var table = document.getElementById(tableId);
+      if (!table) return;
+      var csv = [];
+      for (var i = 0; i < table.rows.length; i++) {
+        var row = [], cols = table.rows[i].querySelectorAll('td, th');
+        for (var j = 0; j < cols.length - 1; j++) {
+          row.push('"' + cols[j].innerText.replace(/"/g, '""') + '"');
+        }
+        csv.push(row.join(','));
+      }
+      var csvFile = new Blob([csv.join('\\n')], { type: 'text/csv;charset=utf-8;' });
+      var downloadLink = document.createElement('a');
+      downloadLink.download = nombreArchivo || 'export.csv';
+      downloadLink.href = window.URL.createObjectURL(csvFile);
+      downloadLink.style.display = 'none';
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
     };
 
     // VERIFICACIÓN DE SESIÓN Y AUTENTICACIÓN
@@ -555,6 +662,9 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         </button>
         <button id="tabBtnLote" class="tab-btn ${esLote ? 'active' : ''}" type="button" onclick="window.selectTab('lote')">
           📋 Consulta en Lote (Matriz Resumen)
+        </button>
+        <button id="tabBtnSupervisor" class="tab-btn" type="button" onclick="window.selectTab('supervisor')">
+          🗂️ Lote Supervisor (por Cédula)
         </button>
       </div>
 
@@ -911,6 +1021,20 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <p style="color: var(--text-muted); font-size: 1.1rem;">Ingresa la lista de causas arriba para generar la Matriz Resumen de Consulta en Lote.</p>
         </div>
         `}
+      </div>
+
+      <!-- PESTAÑA 3: LOTE SUPERVISOR (BÚSQUEDA POR CÉDULA) -->
+      <div id="tab-supervisor" class="tab-content" style="display: none;">
+        <div class="search-box">
+          <label style="font-size:0.88rem; font-weight:700; color:var(--text-muted);">Pega las filas copiadas de Excel (cédula, nombres, apellidos, número de operación) — una persona por línea:</label>
+          <textarea id="inputSupervisorLote" class="search-input" rows="6" placeholder="0104270855&#9;PEREZ&#9;JUAN&#9;OP-12345&#10;0912345678&#9;LOPEZ&#9;MARIA&#9;OP-67890" style="font-family: monospace; white-space: pre;"></textarea>
+          <button type="button" class="btn-search" id="btnSubmitSupervisor" style="align-self:flex-start; margin-top:0.8rem;" onclick="window.ejecutarLoteSupervisor()">
+            <span>🗂️ Ejecutar Consulta en Lote por Cédula</span>
+          </button>
+          <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">Determina el <strong>último juicio vigente</strong> por persona (excluye causas ya sentenciadas o declaradas en abandono).</p>
+        </div>
+
+        <div id="supervisorResultadosBox"></div>
       </div>
 
       <div class="footer">
