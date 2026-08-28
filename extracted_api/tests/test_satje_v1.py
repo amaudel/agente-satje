@@ -1,5 +1,7 @@
 import httpx
+import pytest
 from functools import partial
+from io import BytesIO
 from reportlab.pdfgen import canvas
 from fastapi.testclient import TestClient
 
@@ -429,11 +431,57 @@ def make_pdf_bytes(text: str) -> bytes:
 
 
 def test_extract_pdf_text_reads_generated_pdf():
-    result = extract_pdf_text(make_pdf_bytes("Texto del escrito HBA"))
+    import anyio
+
+    result = anyio.run(extract_pdf_text, make_pdf_bytes("Texto del escrito HBA"))
 
     assert result["pages"] == 1
     assert result["extractionMethod"] == "embedded_text"
     assert "Texto del escrito HBA" in result["text"]
+
+
+def test_extract_pdf_text_caps_embedded_pages(monkeypatch):
+    import anyio
+
+    from app.config import settings
+
+    # PDF con 3 paginas: el tope configurado debe limitar la extraccion
+    # (C1: un PDF puede declarar miles de paginas; nunca se itera mas alla del tope).
+    buffer = BytesIO()
+    pdf = canvas.Canvas(buffer)
+    for i in range(1, 4):
+        pdf.drawString(72, 720, f"Pagina {i}")
+        pdf.showPage()
+    pdf.save()
+    pdf_bytes = buffer.getvalue()
+
+    monkeypatch.setattr(settings, "pdf_text_max_pages", 2)
+    result = anyio.run(extract_pdf_text, pdf_bytes)
+
+    assert result["pages"] == 2
+    assert result["extractionMethod"] == "embedded_text"
+
+
+def test_extract_pdf_text_enforces_global_timeout(monkeypatch):
+    import anyio
+
+    from app import pdf_text as pdf_text_module
+    from app.config import settings
+
+    async def slow_extract(_pdf_bytes):
+        import asyncio
+
+        await asyncio.sleep(5)
+        return [], "embedded_text"
+
+    monkeypatch.setattr(pdf_text_module, "_extract_text", slow_extract)
+    monkeypatch.setattr(settings, "pdf_text_extraction_timeout_seconds", 0.05)
+
+    with pytest.raises(ApiError) as exc_info:
+        anyio.run(pdf_text_module.extract_pdf_text, b"%PDF-1.4\n%%EOF")
+
+    assert exc_info.value.status_code == 504
+    assert exc_info.value.code == ErrorCode.PDF_TEXT_EXTRACTION_ERROR
 
 
 def test_apify_connector_decodes_document_hba_base64(monkeypatch):

@@ -1,3 +1,4 @@
+import asyncio
 from io import BytesIO
 import shutil
 import subprocess
@@ -60,7 +61,21 @@ def _extract_text_with_ocr(pdf_bytes: bytes, pages: int) -> list[dict[str, objec
     return page_texts
 
 
-def extract_pdf_text(pdf_bytes: bytes) -> dict[str, object]:
+def _extract_embedded_text(pdf_bytes: bytes) -> list[dict[str, object]]:
+    reader = PdfReader(BytesIO(pdf_bytes))
+    # Tope duro de paginas para la via "embedded text": un PDF de hasta 26 MB
+    # puede declarar miles de paginas en su arbol; nunca se itera mas alla del
+    # limite configurado (C1: DoS por extraccion).
+    max_pages = min(len(reader.pages), max(1, settings.pdf_text_max_pages))
+    page_texts: list[dict[str, object]] = []
+    for page_number in range(1, max_pages + 1):
+        page = reader.pages[page_number - 1]
+        text = page.extract_text() or ""
+        page_texts.append({"page": page_number, "text": text.strip()})
+    return page_texts
+
+
+async def extract_pdf_text(pdf_bytes: bytes) -> dict[str, object]:
     if len(pdf_bytes) > settings.pdf_text_max_bytes:
         raise ApiError(
             ErrorCode.PDF_TEXT_EXTRACTION_ERROR,
@@ -78,20 +93,17 @@ def extract_pdf_text(pdf_bytes: bytes) -> dict[str, object]:
         )
 
     try:
-        reader = PdfReader(BytesIO(pdf_bytes))
-        page_texts = []
-        for index, page in enumerate(reader.pages, start=1):
-            text = page.extract_text() or ""
-            page_texts.append({"page": index, "text": text.strip()})
-    except Exception as exc:
-        raise ApiError(ErrorCode.PDF_TEXT_EXTRACTION_ERROR, "pdfTextExtraction", status_code=422) from exc
-
-    extraction_method = "embedded_text"
-    if not any(item["text"] for item in page_texts):
-        ocr_page_texts = _extract_text_with_ocr(pdf_bytes, len(page_texts))
-        if any(item["text"] for item in ocr_page_texts):
-            page_texts = ocr_page_texts
-            extraction_method = "ocr"
+        page_texts, extraction_method = await asyncio.wait_for(
+            _extract_text(pdf_bytes),
+            timeout=settings.pdf_text_extraction_timeout_seconds,
+        )
+    except TimeoutError:
+        raise ApiError(
+            ErrorCode.PDF_TEXT_EXTRACTION_ERROR,
+            "pdfTextExtraction",
+            message="La extraccion de texto del documento excedio el tiempo maximo permitido.",
+            status_code=504,
+        ) from None
 
     return {
         "pages": len(page_texts),
@@ -99,3 +111,17 @@ def extract_pdf_text(pdf_bytes: bytes) -> dict[str, object]:
         "pageTexts": page_texts,
         "extractionMethod": extraction_method,
     }
+
+
+async def _extract_text(pdf_bytes: bytes) -> tuple[list[dict[str, object]], str]:
+    # C1: todo el trabajo pesado (parseo pypdf + subprocess de OCR) corre en un
+    # thread del executor del loop; el event loop queda libre para el resto de
+    # requests. El timeout global lo aplica el caller (wait_for en extract_pdf_text).
+    page_texts = await asyncio.to_thread(_extract_embedded_text, pdf_bytes)
+    extraction_method = "embedded_text"
+    if not any(item["text"] for item in page_texts):
+        ocr_page_texts = await asyncio.to_thread(_extract_text_with_ocr, pdf_bytes, len(page_texts))
+        if any(item["text"] for item in ocr_page_texts):
+            page_texts = ocr_page_texts
+            extraction_method = "ocr"
+    return page_texts, extraction_method

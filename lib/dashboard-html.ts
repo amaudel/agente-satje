@@ -1,5 +1,25 @@
 import type { ClasificacionEtapa, AnalisisCicloVidaMedida } from "./legal-analysis.js";
 
+// A2: escape de valores de usuario antes de interpolar en el HTML del dashboard.
+// `causa` llega via query string (/?causa=...) y normalizarNumeroCausa devuelve
+// el input tal cual si no tiene 13-16 digitos, asi que un payload XSS llega
+// intacto al servidor: hay que escaparlo en atributos, texto y contexto JS.
+function escapeHtml(value: unknown): string {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Para interpolar un string dentro de un bloque <script> del HTML: JSON.stringify
+// produce un literal JS valido, y ademas se neutraliza `<` como \u003c para que
+// un valor con `</script>` no pueda cerrar el bloque script del dashboard.
+function jsString(value: unknown): string {
+  return JSON.stringify(String(value ?? "")).replace(/</g, "\\u003c");
+}
+
 export function generarDashboardHTML(datos: any, esLote: boolean = false, resultadosLote: any[] = []): string {
   const causa = datos?.causa || "";
   const resumenIA = datos?.resumen_ejecutivo_ia || "No se ha realizado análisis aún.";
@@ -142,7 +162,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       msgs.appendChild(aiBubble);
       msgs.scrollTop = msgs.scrollHeight;
 
-      var causaActualUrl = new URLSearchParams(window.location.search).get('causa') || "${causa}";
+      var causaActualUrl = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
 
       fetch('/?action=chat', {
         method: 'POST',
@@ -184,7 +204,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         return;
       }
 
-      var causaActualUrl = new URLSearchParams(window.location.search).get('causa') || "${causa}";
+      var causaActualUrl = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
       out.innerHTML = '⏳ Buscando causas con esa cédula y comparando el asunto...';
 
       fetch('/?action=buscar-reinicio', {
@@ -682,7 +702,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       <div id="tab-individual" class="tab-content" style="display: ${!esLote ? 'block' : 'none'};">
         <div class="search-box">
           <form class="search-form" id="formSearchIndividual" method="GET" action="/" onsubmit="activarModalCarga('🔍 Consultando causa individual...');">
-            <input type="text" name="causa" class="search-input" id="inputSearchIndividual" placeholder="Ingresa un número de causa (ej: 01333-2025-08870 o 01333-2023-10725)" value="${!esLote ? causa : ''}" required />
+            <input type="text" name="causa" class="search-input" id="inputSearchIndividual" placeholder="Ingresa un número de causa (ej: 01333-2025-08870 o 01333-2023-10725)" value="${escapeHtml(!esLote ? causa : '')}" required />
             <button type="submit" class="btn-search" id="btnSubmitIndividual">
               <span>Consultar Causa</span>
             </button>
@@ -967,7 +987,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         <div class="search-box">
           <form class="search-form vertical" id="formSearchLote" method="GET" action="/" onsubmit="activarModalCarga('📋 Procesando lote de causas...');">
             <label style="font-size:0.88rem; font-weight:700; color:var(--text-muted);">Ingresa la lista de causas (separadas por coma o salto de línea):</label>
-            <textarea name="causas" class="search-input" id="inputSearchLote" rows="3" placeholder="Ej: 01333-2025-08870&#10;01333-2023-10725&#10;01333-2024-04697" required>${esLote ? causa : ''}</textarea>
+            <textarea name="causas" class="search-input" id="inputSearchLote" rows="3" placeholder="Ej: 01333-2025-08870&#10;01333-2023-10725&#10;01333-2024-04697" required>${escapeHtml(esLote ? causa : '')}</textarea>
             <button type="submit" class="btn-search" id="btnSubmitLote" style="align-self:flex-start; margin-top:0.8rem;">
               <span>📋 Ejecutar Consulta en Lote</span>
             </button>
@@ -1059,7 +1079,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     <div class="chat-body" id="chatMessages">
       <div class="chat-msg ai">
         👋 ¡Hola! Soy tu <strong>Asistente Legal de Inteligencia Judicial</strong>.<br/><br/>
-        Tengo acceso a las actuaciones reales de esta causa (${causa || 'General'}), sus 4 fechas registrales y la etapa procesal.<br/><br/>
+        Tengo acceso a las actuaciones reales de esta causa (${escapeHtml(causa || 'General')}), sus 4 fechas registrales y la etapa procesal.<br/><br/>
         ¿En qué te puedo asesorar o qué escrito necesitas redactar?
       </div>
     </div>

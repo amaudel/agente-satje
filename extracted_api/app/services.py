@@ -816,7 +816,7 @@ class SatjeService:
             pdf_bytes = document.get("bytes")
             if not isinstance(pdf_bytes, bytes):
                 raise ApiError(ErrorCode.SATJE_INVALID_RESPONSE, "documentHba", status_code=502)
-            extracted = extract_pdf_text(pdf_bytes)
+            extracted = await extract_pdf_text(pdf_bytes)
             state["bytes"] = len(pdf_bytes)
             state["pages"] = int(extracted["pages"])
             state["ocr"] = 1 if extracted.get("extractionMethod") == "ocr" else 0

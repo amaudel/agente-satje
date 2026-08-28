@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     satje_circuit_reset_seconds: int = 300
     metrics_db_path: str = "satje_ops.sqlite3"
     pdf_text_max_bytes: int = 26_214_400
+    pdf_text_max_pages: int = 100
     pdf_text_ocr_enabled: bool = True
     pdf_text_ocr_max_pages: int = 30
     pdf_text_ocr_dpi: int = 200
