@@ -7,6 +7,9 @@ from typing import Any
 
 from .config import settings
 
+SQLITE_TIMEOUT_MS = 5000
+_SCHEMA_READY = False
+
 
 def _db_path() -> Path:
     path = Path(settings.metrics_db_path)
@@ -15,8 +18,18 @@ def _db_path() -> Path:
     return path
 
 
+def _connect() -> sqlite3.Connection:
+    conn = sqlite3.connect(_db_path(), timeout=SQLITE_TIMEOUT_MS / 1000)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute(f"PRAGMA busy_timeout={SQLITE_TIMEOUT_MS}")
+    return conn
+
+
 def init_metrics() -> None:
-    with sqlite3.connect(_db_path()) as conn:
+    global _SCHEMA_READY
+    if _SCHEMA_READY:
+        return
+    with _connect() as conn:
         conn.execute(
             """
             create table if not exists operation_metrics (
@@ -36,6 +49,7 @@ def init_metrics() -> None:
             )
             """
         )
+    _SCHEMA_READY = True
 
 
 def record_metric(
@@ -52,36 +66,40 @@ def record_metric(
     counts: dict[str, Any] | None = None,
     meta: dict[str, Any] | None = None,
 ) -> None:
-    init_metrics()
-    safe_meta = {
-        key: value
-        for key, value in (meta or {}).items()
-        if "token" not in key.lower() and "key" not in key.lower() and "secret" not in key.lower()
-    }
-    with sqlite3.connect(_db_path()) as conn:
-        conn.execute(
-            """
-            insert into operation_metrics (
-                created_at, request_id, endpoint, stage, mode, backend, status,
-                duration_ms, error_code, retry_count, counts_json, meta_json
+    # A2: registrar una metrica nunca debe romper el request principal.
+    try:
+        init_metrics()
+        safe_meta = {
+            key: value
+            for key, value in (meta or {}).items()
+            if "token" not in key.lower() and "key" not in key.lower() and "secret" not in key.lower()
+        }
+        with _connect() as conn:
+            conn.execute(
+                """
+                insert into operation_metrics (
+                    created_at, request_id, endpoint, stage, mode, backend, status,
+                    duration_ms, error_code, retry_count, counts_json, meta_json
+                )
+                values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    int(time.time()),
+                    request_id,
+                    endpoint,
+                    stage,
+                    mode,
+                    backend,
+                    status,
+                    duration_ms,
+                    error_code,
+                    retry_count,
+                    json.dumps(counts or {}, ensure_ascii=False),
+                    json.dumps(safe_meta, ensure_ascii=False, default=str),
+                ),
             )
-            values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                int(time.time()),
-                request_id,
-                endpoint,
-                stage,
-                mode,
-                backend,
-                status,
-                duration_ms,
-                error_code,
-                retry_count,
-                json.dumps(counts or {}, ensure_ascii=False),
-                json.dumps(safe_meta, ensure_ascii=False, default=str),
-            ),
-        )
+    except (sqlite3.Error, ValueError, OSError):
+        return
 
 
 def _percentile(values: list[float], percentile: float) -> float | None:
@@ -93,9 +111,13 @@ def _percentile(values: list[float], percentile: float) -> float | None:
 
 
 def summarize_metrics(since_seconds: int = 86400) -> dict[str, Any]:
-    init_metrics()
+    # A2: si no se puede leer la DB, devolver vacio en vez de 500.
+    try:
+        init_metrics()
+    except (sqlite3.Error, OSError):
+        return {"windowSeconds": since_seconds, "totalEvents": 0, "stages": {}}
     since = int(time.time()) - since_seconds
-    with sqlite3.connect(_db_path()) as conn:
+    with _connect() as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """

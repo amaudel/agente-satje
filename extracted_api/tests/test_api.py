@@ -340,3 +340,39 @@ def test_extract_actuaciones_accepts_full_real_example_file():
     )
     assert actuaciones[-1]["codigo"] == 121554299
     assert actuaciones[-1]["fecha"] == "2017-11-13T14:04:00.000+00:00"
+
+
+def test_cache_does_not_raise_when_db_fails(monkeypatch):
+    # A2: un fallo del SQLite (p. ej. database is locked bajo concurrencia) no
+    # debe convertirse en HTTP 500: el cache trata el fallo como cache-miss.
+    import sqlite3
+
+    from app import cache as cache_module
+
+    def failing_connect():
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(cache_module, "_connect", failing_connect)
+
+    assert cache_module.get_cached("clave-cualquiera") is None
+    cache_module.set_cached("clave-cualquiera", {"a": 1})  # no debe lanzar
+
+
+def test_metrics_do_not_raise_when_db_fails(monkeypatch):
+    # A2: registrar/es resumir metricas nunca debe romper el request.
+    import sqlite3
+
+    from app import metrics as metrics_module
+
+    def failing_connect():
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(metrics_module, "_connect", failing_connect)
+
+    metrics_module.record_metric(
+        request_id="req-1", stage="test", status="ok", duration_ms=12.5
+    )  # no debe lanzar
+
+    summary = metrics_module.summarize_metrics(since_seconds=3600)
+    assert summary["totalEvents"] == 0
+    assert summary["stages"] == {}
