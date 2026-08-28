@@ -1,0 +1,11 @@
+node_modules
+.venv
+extracted_api/.venv
+extracted_api/**/__pycache__
+.wrangler
+.vercel
+graphify-out
+testsprite_tests
+pytest-cache-files-*
+*.sqlite3
+*.tar.gz
