@@ -327,6 +327,76 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       });
     };
 
+    // CONSULTA DE PROCESOS POR CEDULA: lista todos los procesos donde la
+    // persona es actora o demandada (estado basico), con enlace a cada detalle.
+    function esc(v) {
+      return String(v == null ? '' : v)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    window.buscarProcesosPorCedula = function(e) {
+      if (e) e.preventDefault();
+      var input = document.getElementById('inputSearchCedula');
+      var out = document.getElementById('cedulaResultados');
+      if (!input || !out) return;
+      var cedula = input.value.trim();
+      if (!cedula) {
+        out.innerHTML = '<span style="color:var(--warning);">Ingresa una cédula.</span>';
+        return;
+      }
+
+      out.innerHTML = '<div class="card" style="padding:1.5rem; text-align:center; color:var(--text-muted);">⏳ Consultando procesos de la cédula ' + esc(cedula) + ' en SATJE...</div>';
+
+      fetch('/?action=buscar-cedula', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'buscar-cedula', cedula: cedula })
+      })
+      .then(function(r) { return r.json(); })
+      .then(function(res) {
+        if (!res.ok) {
+          out.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ ' + esc(res.error || 'No se pudo completar la búsqueda.') + '</div>';
+          return;
+        }
+        var procesos = res.procesos || [];
+        if (procesos.length === 0) {
+          out.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--text-muted);">No se encontraron procesos para la cédula <strong>' + esc(res.cedula) + '</strong>.</div>';
+          return;
+        }
+        var html = '<div class="batch-card">' +
+          '<div class="batch-header">' +
+            '<div class="batch-title">🔎 PROCESOS DE LA CÉDULA ' + esc(res.cedula) + ' (' + procesos.length + ')</div>' +
+          '</div>' +
+          '<div class="table-container"><table class="batch-table" id="cedulaTable"><thead><tr>' +
+            '<th>N° Proceso</th><th>Judicatura</th><th>Materia / Acción</th><th>Fecha Ingreso</th><th>Estado</th><th>Acción</th>' +
+          '</tr></thead><tbody>';
+
+        procesos.forEach(function(p) {
+          var numero = p.numeroProceso || p.idJuicio || '';
+          var materiaAccion = [p.materia, p.accion].filter(Boolean).join(' — ') || 'N/D';
+          var fecha = (p.fechaIngreso || '').split('T')[0] || 'N/D';
+          html += '<tr>' +
+            '<td><strong>' + esc(numero) + '</strong></td>' +
+            '<td>' + esc(p.judicatura || 'N/D') + '</td>' +
+            '<td>' + esc(materiaAccion) + '</td>' +
+            '<td>' + esc(fecha) + '</td>' +
+            '<td>' + esc(p.estadoActual || 'N/D') + '</td>' +
+            '<td><a href="/?causa=' + encodeURIComponent(numero) + '" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>' +
+          '</tr>';
+        });
+
+        html += '</tbody></table></div></div>';
+        out.innerHTML = html;
+      })
+      .catch(function(err) {
+        out.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ Error de conexión: ' + esc(err.message) + '</div>';
+      });
+    };
+
     window.exportarCSVTabla = function(tableId, nombreArchivo) {
       var table = document.getElementById(tableId);
       if (!table) return;
@@ -713,6 +783,20 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             <a href="/?causa=01333-2023-10725" class="chip-btn chip-link">01333-2023-10725 (Inmueble 2023)</a>
             <a href="/?causa=01333-2025-08348" class="chip-btn chip-link">01333-2025-08348 (Registral 2025)</a>
           </div>
+        </div>
+
+        <!-- CONSULTA POR CEDULA: lista todos los procesos de una persona -->
+        <div class="search-box" style="border-left: 4px solid var(--accent);">
+          <form class="search-form" id="formSearchCedula" onsubmit="window.buscarProcesosPorCedula(event)">
+            <input type="text" class="search-input" id="inputSearchCedula" placeholder="Ingresa una cédula (ej: 0104270855)" inputmode="numeric" maxlength="10" required />
+            <button type="submit" class="btn-search">
+              <span>🔎 Consultar Procesos por Cédula</span>
+            </button>
+          </form>
+          <div class="quick-chips">
+            <span class="chip-label">Muestra todos los procesos donde la persona es actora o demandada.</span>
+          </div>
+          <div id="cedulaResultados" style="margin-top:1rem;"></div>
         </div>
 
         ${causa && !esLote ? `

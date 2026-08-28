@@ -341,6 +341,51 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       return res.status(200).json({ ok: true, total: filas.length, filas });
     }
 
+    // 2d. CONSULTA DE PROCESOS POR CEDULA
+    // Lista todos los procesos donde una persona es actora o demandada, con su
+    // estado basico (numero, judicatura, materia, accion, fecha, estado), para
+    // identificar el proceso que interesa y abrirlo con ?causa=NUMERO.
+    if (req.query.action === "buscar-cedula" || bodyData.action === "buscar-cedula") {
+      const cedula = String(bodyData.cedula || req.query.cedula || "").trim();
+      if (!cedula) return res.status(400).json({ ok: false, error: "Falta la cedula a consultar." });
+      if (!/^\d{10}$/.test(cedula)) {
+        return res.status(400).json({ ok: false, error: "La cedula debe tener 10 digitos numericos." });
+      }
+
+      const baseUrl = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKey = process.env.SATJE_API_KEY;
+      if (!apiKey) return res.status(500).json({ ok: false, error: "SATJE_API_KEY no esta configurado en el servidor." });
+      const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json", "X-API-Key": apiKey };
+
+      try {
+        const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+        });
+        if (!resBuscar.ok) {
+          return res.status(502).json({ ok: false, error: `No se pudo buscar procesos por cedula (HTTP ${resBuscar.status}).` });
+        }
+        const buscarData: any = await resBuscar.json();
+        const causasRaw = Array.isArray(buscarData?.data) ? buscarData.data : [];
+
+        const procesos = causasRaw.map((c: any) => ({
+          idJuicio: c?.idJuicio || null,
+          numeroProceso: c?.numeroProceso || c?.idJuicio || null,
+          judicatura: c?.judicatura || null,
+          materia: c?.materia || null,
+          accion: c?.accion || null,
+          fechaIngreso: c?.fechaIngreso || null,
+          estadoActual: c?.estadoActual || null,
+          rolesEncontrados: Array.isArray(c?.rolesEncontrados) ? c.rolesEncontrados : [],
+        }));
+
+        return res.status(200).json({ ok: true, cedula, total: procesos.length, procesos });
+      } catch (errCedula: any) {
+        return res.status(500).json({ ok: false, error: errCedula?.message || String(errCedula) });
+      }
+    }
+
     let causasRaw = "";
     let esModoLote = false;
 
