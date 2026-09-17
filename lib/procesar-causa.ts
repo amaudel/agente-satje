@@ -90,8 +90,12 @@ export async function procesarCausaIndividual(
       method: "POST",
       headers,
       body: JSON.stringify({
-        query: causaFormateada,
-        tipoBusqueda: "auto",
+        // El backend no sabe interpretar "01333-2025-08870": su deteccion
+        // automatica exige grupos de 11+ digitos y los guiones los parten,
+        // asi que devolvia 422 en TODAS las consultas. Se envia el numero
+        // sin guiones y con tipoBusqueda explicito.
+        query: causaSinGuiones || causaFormateada,
+        tipoBusqueda: "proceso",
         incluirActuaciones: true,
         maxActuaciones: 20,
       }),
@@ -100,20 +104,22 @@ export async function procesarCausaIndividual(
   );
   if (rAgent) actuaciones = rAgent;
 
-  if (actuaciones.length === 0) {
+  // El endpoint /causas/{id}/actuaciones espera el id SIN guiones: con
+  // guiones devuelve 404. Por eso ese formato se intenta primero.
+  if (actuaciones.length === 0 && causaSinGuiones) {
     const r1 = await intentar(
       "causas/actuaciones",
-      `${baseUrl}/api/v1/causas/${encodeURIComponent(causaFormateada)}/actuaciones`,
+      `${baseUrl}/api/v1/causas/${encodeURIComponent(causaSinGuiones)}/actuaciones`,
       { headers },
       TIMEOUT_ACTUACIONES_MS
     );
     if (r1) actuaciones = r1;
   }
 
-  if (actuaciones.length === 0 && causaSinGuiones) {
+  if (actuaciones.length === 0 && causaFormateada !== causaSinGuiones) {
     const r2 = await intentar(
-      "causas/actuaciones (sin guiones)",
-      `${baseUrl}/api/v1/causas/${encodeURIComponent(causaSinGuiones)}/actuaciones`,
+      "causas/actuaciones (con guiones)",
+      `${baseUrl}/api/v1/causas/${encodeURIComponent(causaFormateada)}/actuaciones`,
       { headers },
       TIMEOUT_ACTUACIONES_MS
     );
