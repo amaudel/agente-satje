@@ -50,12 +50,16 @@ function crearPresupuesto(msTotal: number) {
 }
 
 // Fila equivalente a procesarCausaIndividual() pero sin consultar nada.
-function resultadoNoProcesado(causa: string, motivo: string) {
-  return {
+// El tipo de retorno se ancla al de procesarCausaIndividual para que
+// mapConcurrente infiera bien el tipo del lote (si no, R cae a unknown).
+type ResultadoCausa = Awaited<ReturnType<typeof procesarCausaIndividual>>;
+
+function resultadoNoProcesado(causa: string, motivo: string): ResultadoCausa {
+  const fila: any = {
     causa,
     backendError: motivo,
-    etapaProcesalGeneral: null,
-    etapaProcesalEspecifica: null,
+    etapaProcesalGeneral: "NO PROCESADO",
+    etapaProcesalEspecifica: "NO PROCESADO",
     poseeSentencia: false,
     fechaSentencia: null,
     medidaDetectada: false,
@@ -65,11 +69,12 @@ function resultadoNoProcesado(causa: string, motivo: string) {
     alertaAbandono: "No procesado",
     diasRestantesAbandono: null,
     totalActuaciones: 0,
-    cicloVidaMedida: { medidaDetectada: false, estadoCicloVida: null } as any,
-    clasificacionEtapa: { etapaGeneral: null, etapaEspecifica: null, codigoEtapa: null, explicacion: null } as any,
+    cicloVidaMedida: { medidaDetectada: false, estadoCicloVida: null },
+    clasificacionEtapa: { etapaGeneral: "NO PROCESADO", etapaEspecifica: "NO PROCESADO", codigoEtapa: "", explicacion: "" },
     alertaAbandonoObjeto: { badgeClass: "muted", nivel: "desconocido" },
-    actuaciones: [] as any[],
+    actuaciones: [],
   };
+  return fila;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -533,10 +538,10 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     // MODO BATCH (CONSULTA EN LOTE - PESTAÑA 2)
     if (esModoLote || listaCausas.length > 1) {
       const presupuestoLote = crearPresupuesto(PRESUPUESTO_LOTE_MS);
-      const resultadosLote = await mapConcurrente(listaCausas, CONCURRENCIA_CAUSAS, (causaItem) =>
+      const resultadosLote = await mapConcurrente(listaCausas, CONCURRENCIA_CAUSAS, async (causaItem) =>
         presupuestoLote.agotado()
-          ? Promise.resolve(resultadoNoProcesado(causaItem, "No procesado: se agoto el tiempo de la consulta en lote."))
-          : procesarCausaIndividual(causaItem, baseUrl, apiKey, presupuestoLote.restante())
+          ? resultadoNoProcesado(causaItem, "No procesado: se agoto el tiempo de la consulta en lote.")
+          : await procesarCausaIndividual(causaItem, baseUrl, apiKey, presupuestoLote.restante())
       );
 
       if (wantsJson) {
