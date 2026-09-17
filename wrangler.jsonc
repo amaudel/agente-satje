@@ -6,13 +6,19 @@
   "account_id": "783d1eefeff0860c9c1919242f891c93",
   "workers_dev": true,
 
-  "routes": [
-    {
-      "pattern": "agente.asitentekairon.cloud",
-      "custom_domain": true,
-      "zone_name": "asitentekairon.cloud"
-    }
-  ],
+  // NOTA: la zona asitentekairon.cloud NO esta en esta cuenta de Cloudflare
+  // (el DNS del dominio vive en el proveedor del VPS), asi que `wrangler
+  // deploy` fallaria al intentar crear este custom domain. El Worker se
+  // publica solo en workers.dev. Si algun dia mueves el DNS a Cloudflare,
+  // descomenta el bloque.
+  //
+  // "routes": [
+  //   {
+  //     "pattern": "agente.asitentekairon.cloud",
+  //     "custom_domain": true,
+  //     "zone_name": "asitentekairon.cloud"
+  //   }
+  // ],
 
   "vars": {
     "SATJE_API_BASE_URL": "https://api.asitentekairon.cloud",

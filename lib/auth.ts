@@ -1,5 +1,5 @@
 import type { VercelRequest } from "@vercel/node";
-import crypto from "crypto";
+import crypto from "node:crypto";
 
 export const SESSION_COOKIE_NAME = "satje_session";
 
