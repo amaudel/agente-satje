@@ -6,11 +6,13 @@ export const SESSION_COOKIE_NAME = "satje_session";
 // Duracion de la sesion (7 dias). Se usa tambien en el Max-Age de la cookie.
 export const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 
-// La clave del HMAC es la propia contrasena salvo que se configure un
-// SATJE_SESSION_SECRET dedicado. Con esto, cambiar la contrasena invalida
-// automaticamente todas las sesiones emitidas.
-function sessionSecret(password: string): string {
-  return process.env.SATJE_SESSION_SECRET || password;
+// La clave del HMAC es la propia contrasena salvo que se pase un secreto
+// dedicado (SATJE_SESSION_SECRET). Se recibe como PARAMETRO en vez de leer
+// process.env para que este modulo sirva igual en Vercel (Node) y en el
+// Worker de Cloudflare. Cambiar la contrasena invalida automaticamente
+// todas las sesiones emitidas.
+export function sessionSecretFor(password: string, explicitSecret?: string): string {
+  return explicitSecret && explicitSecret.length > 0 ? explicitSecret : password;
 }
 
 function firmar(payload: string, secret: string): string {
@@ -28,15 +30,20 @@ export function safeCompare(a: unknown, b: unknown): boolean {
 // El token de sesion es "<expiracion>.<hmac>". Antes era sha256(contrasena),
 // un valor deterministico y sin sal que, si se filtraba una cookie, exponia
 // un hash de la contrasena verificable offline con un diccionario.
-export function createSessionToken(password: string, nowMs: number = Date.now()): string {
+export function createSessionToken(
+  password: string,
+  explicitSecret: string | undefined = undefined,
+  nowMs: number = Date.now()
+): string {
   const exp = Math.floor(nowMs / 1000) + SESSION_TTL_SECONDS;
   const payload = String(exp);
-  return `${payload}.${firmar(payload, sessionSecret(password))}`;
+  return `${payload}.${firmar(payload, sessionSecretFor(password, explicitSecret))}`;
 }
 
 export function verifySessionToken(
   token: string | undefined,
   password: string,
+  explicitSecret: string | undefined = undefined,
   nowMs: number = Date.now()
 ): boolean {
   if (!token) return false;
@@ -49,7 +56,7 @@ export function verifySessionToken(
   const exp = Number(payload);
   if (!Number.isFinite(exp) || exp <= Math.floor(nowMs / 1000)) return false;
 
-  return safeCompare(firma, firmar(payload, sessionSecret(password)));
+  return safeCompare(firma, firmar(payload, sessionSecretFor(password, explicitSecret)));
 }
 
 export function parseCookies(cookieHeader: string | undefined): Record<string, string> {
@@ -65,10 +72,14 @@ export function parseCookies(cookieHeader: string | undefined): Record<string, s
   return out;
 }
 
-export function isAuthenticated(req: VercelRequest, authPassword: string | undefined): boolean {
+export function isAuthenticated(
+  req: VercelRequest,
+  authPassword: string | undefined,
+  explicitSecret: string | undefined = undefined
+): boolean {
   if (!authPassword) return false;
   const provided = parseCookies(req.headers.cookie)[SESSION_COOKIE_NAME];
-  return verifySessionToken(provided, authPassword);
+  return verifySessionToken(provided, authPassword, explicitSecret);
 }
 
 export function generarLoginHTML(): string {

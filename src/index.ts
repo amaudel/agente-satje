@@ -6,11 +6,42 @@ import {
   detectorCicloVidaMedidaCautelar,
   calcularAlertaAbandonoProcesal,
 } from "../lib/legal-analysis.js";
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_SECONDS,
+  createSessionToken,
+  verifySessionToken,
+  safeCompare,
+  parseCookies,
+  generarLoginHTML,
+} from "../lib/auth.js";
+import { consultarLimite, registrarFallo, limpiarLimite } from "../lib/rate-limit.js";
 
 export interface Env {
   SATJE_API_BASE_URL?: string;
   SATJE_API_KEY?: string;
   OPENAI_API_KEY?: string;
+  SATJE_AUTH_PASSWORD?: string;
+  SATJE_SESSION_SECRET?: string;
+}
+
+// Mismos parametros que el login del dashboard de Vercel.
+const LOGIN_VENTANA_SEGUNDOS = 300;
+const LOGIN_MAX_FALLOS = 10;
+const MENSAJE_SIN_PASSWORD =
+  "SATJE_AUTH_PASSWORD no esta configurado en este Worker. Ejecuta: npx wrangler secret put SATJE_AUTH_PASSWORD";
+
+function jsonResponse(payload: unknown, status: number, extraHeaders: Record<string, string> = {}): Response {
+  return new Response(JSON.stringify(payload, null, 2), {
+    status,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, X-API-Key, Authorization",
+      "Content-Type": "application/json; charset=utf-8",
+      ...extraHeaders,
+    },
+  });
 }
 
 export default {
@@ -27,6 +58,68 @@ export default {
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
+    }
+
+    const authPassword = env.SATJE_AUTH_PASSWORD;
+    const sessionSecret = env.SATJE_SESSION_SECRET;
+    const ip = request.headers.get("cf-connecting-ip")
+      || (request.headers.get("x-forwarded-for") || "").split(",")[0].trim()
+      || "desconocida";
+
+    // ── LOGIN: unico endpoint publico ──
+    if (url.pathname === "/login" || url.searchParams.get("action") === "login") {
+      if (!authPassword) return jsonResponse({ ok: false, error: MENSAJE_SIN_PASSWORD }, 500);
+
+      if (request.method !== "POST") {
+        return new Response(generarLoginHTML(), {
+          status: 401,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+
+      const limite = consultarLimite(`login:${ip}`, LOGIN_MAX_FALLOS, LOGIN_VENTANA_SEGUNDOS);
+      if (!limite.permitido) {
+        return jsonResponse(
+          { ok: false, error: `Demasiados intentos fallidos. Vuelve a intentar en ${limite.reintentarEnSegundos} segundos.` },
+          429,
+          { "Retry-After": String(limite.reintentarEnSegundos) }
+        );
+      }
+
+      let cuerpo: any = {};
+      try {
+        cuerpo = await request.json();
+      } catch (eCuerpo) {
+        cuerpo = {};
+      }
+      const passVal = typeof cuerpo?.password === "string" ? cuerpo.password : "";
+
+      if (passVal && safeCompare(passVal, authPassword)) {
+        limpiarLimite(`login:${ip}`);
+        return jsonResponse({ ok: true, token: "authenticated" }, 200, {
+          "Set-Cookie": `${SESSION_COOKIE_NAME}=${createSessionToken(authPassword, sessionSecret)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SECONDS}`,
+        });
+      }
+
+      registrarFallo(`login:${ip}`);
+      // Retardo fijo: encarece la fuerza bruta aunque se roten IPs.
+      await new Promise((r) => setTimeout(r, 400));
+      return jsonResponse({ ok: false, error: "Contraseña incorrecta" }, 401);
+    }
+
+    // ── GATE: nada de lo que sigue se sirve sin una sesion valida ──
+    if (!authPassword) return jsonResponse({ ok: false, error: MENSAJE_SIN_PASSWORD }, 500);
+
+    const cookies = parseCookies(request.headers.get("cookie") || undefined);
+    if (!verifySessionToken(cookies[SESSION_COOKIE_NAME], authPassword, sessionSecret)) {
+      const acepta = request.headers.get("accept") || "";
+      if (acepta.includes("text/html")) {
+        return new Response(generarLoginHTML(), {
+          status: 401,
+          headers: { "Content-Type": "text/html; charset=utf-8" },
+        });
+      }
+      return jsonResponse({ ok: false, error: "No autenticado. Envia la contraseña a POST /login primero." }, 401);
     }
 
     // Ruta de estado / documentación de la API del agente

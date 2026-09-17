@@ -118,7 +118,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         limpiarLimite(`login:ip:${ip}`);
         res.setHeader(
           "Set-Cookie",
-          `${SESSION_COOKIE_NAME}=${createSessionToken(authPassword)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SECONDS}`
+          `${SESSION_COOKIE_NAME}=${createSessionToken(authPassword, process.env.SATJE_SESSION_SECRET)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SECONDS}`
         );
         return res.status(200).json({ ok: true, token: "authenticated" });
       }
@@ -133,7 +133,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // 1b. GATE DE AUTENTICACIÓN — nada de lo que sigue se sirve sin sesión válida
-    if (!isAuthenticated(req, authPassword)) {
+    if (!isAuthenticated(req, authPassword, process.env.SATJE_SESSION_SECRET)) {
       if (wantsJson) {
         return res.status(401).json({ ok: false, error: "No autenticado. Envia la contraseña a POST /?action=login primero." });
       }

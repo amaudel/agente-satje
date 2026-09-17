@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import {
   createSessionToken,
   verifySessionToken,
+  sessionSecretFor,
   safeCompare,
   parseCookies,
   SESSION_TTL_SECONDS,
@@ -39,9 +40,9 @@ test("una expiracion alterada no verifica", () => {
 
 test("un token expirado no verifica", () => {
   const ahora = Date.now();
-  const token = createSessionToken(PASSWORD, ahora);
-  assert.equal(verifySessionToken(token, PASSWORD, ahora), true);
-  assert.equal(verifySessionToken(token, PASSWORD, ahora + SESSION_TTL_SECONDS * 1000 + 1000), false);
+  const token = createSessionToken(PASSWORD, undefined, ahora);
+  assert.equal(verifySessionToken(token, PASSWORD, undefined, ahora), true);
+  assert.equal(verifySessionToken(token, PASSWORD, undefined, ahora + SESSION_TTL_SECONDS * 1000 + 1000), false);
 });
 
 test("un token emitido con otra contrasena no verifica", () => {
@@ -58,9 +59,34 @@ test("tokens invalidos o vacios no verifican", () => {
 });
 
 test("dos tokens emitidos en el mismo segundo son iguales (deterministas por exp)", () => {
-  const t1 = createSessionToken(PASSWORD, 1_700_000_000_000);
-  const t2 = createSessionToken(PASSWORD, 1_700_000_000_500);
+  const t1 = createSessionToken(PASSWORD, undefined, 1_700_000_000_000);
+  const t2 = createSessionToken(PASSWORD, undefined, 1_700_000_000_500);
   assert.equal(t1, t2);
+});
+
+test("sessionSecretFor usa el secreto explicito solo si no esta vacio", () => {
+  assert.equal(sessionSecretFor("clave", "secreto"), "secreto");
+  assert.equal(sessionSecretFor("clave", ""), "clave");
+  assert.equal(sessionSecretFor("clave", undefined), "clave");
+});
+
+test("un token firmado con secreto explicito no verifica sin ese secreto", () => {
+  const token = createSessionToken(PASSWORD, "secreto-dedicado");
+  assert.equal(verifySessionToken(token, PASSWORD, "secreto-dedicado"), true);
+  assert.equal(verifySessionToken(token, PASSWORD), false);
+  assert.equal(verifySessionToken(token, PASSWORD, "otro-secreto"), false);
+});
+
+test("cambiar el secreto invalida las sesiones emitidas", () => {
+  const token = createSessionToken(PASSWORD, "secreto-v1");
+  assert.equal(verifySessionToken(token, PASSWORD, "secreto-v1"), true);
+  assert.equal(verifySessionToken(token, PASSWORD, "secreto-v2"), false);
+});
+
+test("cambiar la contrasena invalida las sesiones emitidas", () => {
+  const token = createSessionToken("contrasena-vieja");
+  assert.equal(verifySessionToken(token, "contrasena-vieja"), true);
+  assert.equal(verifySessionToken(token, "contrasena-nueva"), false);
 });
 
 test("safeCompare compara sin lanzar con longitudes distintas", () => {
