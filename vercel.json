@@ -6,6 +6,11 @@
       "destination": "/api"
     }
   ],
+  "functions": {
+    "api/index.ts": {
+      "maxDuration": 60
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",

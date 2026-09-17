@@ -1,5 +1,11 @@
 import { procesarCausaIndividual } from "./procesar-causa.js";
 
+// Timeouts de red contra el backend SATJE: sin esto una lentitud del VPS
+// cuelga la funcion serverless hasta el limite de Vercel.
+const TIMEOUT_RESOLUCIONES_MS = 20000;
+const TIMEOUT_DOCUMENTOS_MS = 20000;
+const TIMEOUT_EXTRACT_TEXT_MS = 45000;
+
 // Herramientas (OpenAI function calling) que le dan al Chat Legal IA acceso
 // bajo demanda a endpoints del backend SATJE que no vienen precargados en el
 // contexto base de la causa: resoluciones, texto de documentos adjuntos, y
@@ -84,7 +90,7 @@ export async function ejecutarHerramientaChat(name: string, args: any, ctx: Chat
     if (name === "obtener_resoluciones") {
       const idJuicio = args?.idJuicio || causaActual;
       if (!idJuicio) return { error: "No hay causa seleccionada." };
-      const res = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(idJuicio)}/resoluciones?limit=20`, { headers });
+      const res = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(idJuicio)}/resoluciones?limit=20`, { headers, signal: AbortSignal.timeout(TIMEOUT_RESOLUCIONES_MS) });
       if (!res.ok) return { error: `SATJE respondio HTTP ${res.status} al pedir resoluciones.` };
       return await res.json();
     }
@@ -96,7 +102,7 @@ export async function ejecutarHerramientaChat(name: string, args: any, ctx: Chat
 
       const resDocs = await fetch(
         `${baseUrl}/api/v1/causas/${encodeURIComponent(idJuicio)}/actuaciones/${encodeURIComponent(args.codigoActuacion)}/documentos`,
-        { headers }
+        { headers, signal: AbortSignal.timeout(TIMEOUT_DOCUMENTOS_MS) }
       );
       if (!resDocs.ok) return { error: `No se encontraron documentos para esa actuacion (HTTP ${resDocs.status}).` };
       const docsData: any = await resDocs.json();
@@ -113,6 +119,7 @@ export async function ejecutarHerramientaChat(name: string, args: any, ctx: Chat
           method: "POST",
           headers,
           body: JSON.stringify({ documentoId: doc.documentoId }),
+          signal: AbortSignal.timeout(TIMEOUT_EXTRACT_TEXT_MS),
         });
         if (!resText.ok) {
           resultados.push({ nombreArchivo: doc.nombreArchivo, error: `HTTP ${resText.status}` });

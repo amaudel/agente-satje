@@ -10,8 +10,67 @@ import {
 import { procesarCausaIndividual } from "../lib/procesar-causa.js";
 import { generarDashboardHTML } from "../lib/dashboard-html.js";
 import { upsertUpstashVector, queryUpstashVector } from "../lib/upstash.js";
-import { SESSION_COOKIE_NAME, sessionTokenFor, isAuthenticated, generarLoginHTML } from "../lib/auth.js";
+import {
+  SESSION_COOKIE_NAME,
+  SESSION_TTL_SECONDS,
+  createSessionToken,
+  isAuthenticated,
+  safeCompare,
+  generarLoginHTML,
+} from "../lib/auth.js";
+import { consultarLimite, registrarFallo, limpiarLimite, ipDelCliente } from "../lib/rate-limit.js";
+import { mapConcurrente } from "../lib/concurrencia.js";
 import { CHAT_TOOLS, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
+
+// --- Limite de intentos fallidos de login (best-effort: ver lib/rate-limit.ts) ---
+const LOGIN_VENTANA_SEGUNDOS = 300;
+const LOGIN_MAX_FALLOS_POR_IP = 10;
+const LOGIN_MAX_FALLOS_GLOBAL = 150;
+
+// --- Topes de tamano, concurrencia y tiempo hacia el backend SATJE ---
+const LOTE_MAX_CAUSAS = 25;
+const LOTE_MAX_PERSONAS = 30;
+const CONCURRENCIA_CAUSAS = 4;
+const CONCURRENCIA_PERSONAS = 4;
+const CONCURRENCIA_DETALLE_CAUSAS = 3;
+const PRESUPUESTO_LOTE_MS = 50000;
+const TIMEOUT_BUSCAR_MS = 30000;
+const TIMEOUT_DOCUMENTOS_MS = 20000;
+const TIMEOUT_EXTRACT_TEXT_MS = 45000;
+
+// Presupuesto compartido por una consulta en lote: cuando se agota se dejan
+// de lanzar llamadas nuevas y las filas pendientes se devuelven marcadas,
+// en vez de que Vercel mate la funcion y se pierda todo el trabajo hecho.
+function crearPresupuesto(msTotal: number) {
+  const fin = Date.now() + msTotal;
+  return {
+    agotado: () => Date.now() >= fin,
+    restante: () => Math.max(0, fin - Date.now()),
+  };
+}
+
+// Fila equivalente a procesarCausaIndividual() pero sin consultar nada.
+function resultadoNoProcesado(causa: string, motivo: string) {
+  return {
+    causa,
+    backendError: motivo,
+    etapaProcesalGeneral: null,
+    etapaProcesalEspecifica: null,
+    poseeSentencia: false,
+    fechaSentencia: null,
+    medidaDetectada: false,
+    tipoMedida: null,
+    estadoCicloVidaMedida: null,
+    fechaInscripcionMedida: null,
+    alertaAbandono: "No procesado",
+    diasRestantesAbandono: null,
+    totalActuaciones: 0,
+    cicloVidaMedida: { medidaDetectada: false, estadoCicloVida: null } as any,
+    clasificacionEtapa: { etapaGeneral: null, etapaEspecifica: null, codigoEtapa: null, explicacion: null } as any,
+    alertaAbandonoObjeto: { badgeClass: "muted", nivel: "desconocido" },
+    actuaciones: [] as any[],
+  };
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
@@ -34,16 +93,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (!authPassword) {
         return res.status(500).json({ ok: false, error: "SATJE_AUTH_PASSWORD no esta configurado en el servidor." });
       }
-      const passVal = req.body.password || "";
-      if (passVal === authPassword) {
+
+      // Limite de intentos FALLIDOS. Solo se cuentan los fallos para no
+      // castigar a varios usuarios legitimos detras de una misma IP (NAT).
+      const ip = ipDelCliente(req.headers as Record<string, unknown>);
+      const limiteIp = consultarLimite(`login:ip:${ip}`, LOGIN_MAX_FALLOS_POR_IP, LOGIN_VENTANA_SEGUNDOS);
+      const limiteGlobal = consultarLimite("login:global", LOGIN_MAX_FALLOS_GLOBAL, LOGIN_VENTANA_SEGUNDOS);
+      if (!limiteIp.permitido || !limiteGlobal.permitido) {
+        const espera = Math.max(limiteIp.reintentarEnSegundos, limiteGlobal.reintentarEnSegundos);
+        res.setHeader("Retry-After", String(espera));
+        return res.status(429).json({
+          ok: false,
+          error: `Demasiados intentos fallidos. Vuelve a intentar en ${espera} segundos.`,
+        });
+      }
+
+      const passVal = typeof req.body.password === "string" ? req.body.password : "";
+      if (passVal && safeCompare(passVal, authPassword)) {
+        limpiarLimite(`login:ip:${ip}`);
         res.setHeader(
           "Set-Cookie",
-          `${SESSION_COOKIE_NAME}=${sessionTokenFor(authPassword)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${60 * 60 * 24 * 7}`
+          `${SESSION_COOKIE_NAME}=${createSessionToken(authPassword)}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL_SECONDS}`
         );
         return res.status(200).json({ ok: true, token: "authenticated" });
-      } else {
-        return res.status(401).json({ ok: false, error: "Contraseña incorrecta" });
       }
+
+      registrarFallo(`login:ip:${ip}`);
+      registrarFallo("login:global");
+
+      // Retardo fijo: encarece la fuerza bruta incluso si el atacante rota
+      // de IP y esquiva el limitador en memoria.
+      await new Promise((r) => setTimeout(r, 400));
+      return res.status(401).json({ ok: false, error: "Contraseña incorrecta" });
     }
 
     // 1b. GATE DE AUTENTICACIÓN — nada de lo que sigue se sirve sin sesión válida
@@ -209,7 +290,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
 
         const idJuicioActual = String(resultado.causa).replace(/\D/g, "");
 
-        const resDocs = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(idJuicioActual)}/actuaciones/${encodeURIComponent(caratula.codigo)}/documentos`, { headers });
+        const resDocs = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(idJuicioActual)}/actuaciones/${encodeURIComponent(caratula.codigo)}/documentos`, { headers, signal: AbortSignal.timeout(TIMEOUT_DOCUMENTOS_MS) });
         if (!resDocs.ok) return res.status(502).json({ ok: false, error: `No se pudo obtener el documento de la caratula (HTTP ${resDocs.status}).` });
         const docsData: any = await resDocs.json();
         const documentoId = docsData?.data?.[0]?.documentoId;
@@ -219,6 +300,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           method: "POST",
           headers,
           body: JSON.stringify({ documentoId }),
+          signal: AbortSignal.timeout(TIMEOUT_EXTRACT_TEXT_MS),
         });
         if (!resText.ok) return res.status(502).json({ ok: false, error: `No se pudo extraer el texto de la caratula (HTTP ${resText.status}).` });
         const textData: any = await resText.json();
@@ -229,6 +311,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           method: "POST",
           headers,
           body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+          signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
         });
         if (!resBuscar.ok) return res.status(502).json({ ok: false, error: `No se pudo buscar causas por cedula (HTTP ${resBuscar.status}).` });
         const buscarData: any = await resBuscar.json();
@@ -259,14 +342,20 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       if (personas.length === 0) {
         return res.status(400).json({ ok: false, error: "No se recibieron personas para la consulta en lote." });
       }
+      if (personas.length > LOTE_MAX_PERSONAS) {
+        return res.status(400).json({
+          ok: false,
+          error: `El lote supera el maximo de ${LOTE_MAX_PERSONAS} personas por consulta (recibidas ${personas.length}). Dividelo en grupos mas pequenos.`,
+        });
+      }
 
       const baseUrl = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
       const apiKey = process.env.SATJE_API_KEY;
       if (!apiKey) return res.status(500).json({ ok: false, error: "SATJE_API_KEY no esta configurado en el servidor." });
       const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json", "X-API-Key": apiKey };
 
-      const filas = await Promise.all(
-        personas.map(async (persona: any) => {
+      const presupuesto = crearPresupuesto(PRESUPUESTO_LOTE_MS);
+      const filas = await mapConcurrente(personas, CONCURRENCIA_PERSONAS, async (persona: any) => {
           const cedula = String(persona?.cedula || "").trim();
           const nombres = String(persona?.nombres || "").trim();
           const apellidos = String(persona?.apellidos || "").trim();
@@ -278,11 +367,16 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
             return { ...filaBase, error: "Falta cedula." };
           }
 
+          if (presupuesto.agotado()) {
+            return { ...filaBase, error: "No procesado: se agoto el tiempo de la consulta en lote. Divide la lista en grupos mas pequenos." };
+          }
+
           try {
             const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
               method: "POST",
               headers,
               body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+          signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
             });
             if (!resBuscar.ok) {
               return { ...filaBase, error: `No se pudo buscar causas por cedula (HTTP ${resBuscar.status}).` };
@@ -294,8 +388,10 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
               return { ...filaBase, totalCausasEncontradas: 0, sinCausaVigente: true };
             }
 
-            const detalles = await Promise.all(
-              causasEncontradas.map((c: any) => procesarCausaIndividual(c.numeroProceso || c.idJuicio, baseUrl, apiKey))
+            const detalles = await mapConcurrente(
+              causasEncontradas,
+              CONCURRENCIA_DETALLE_CAUSAS,
+              (c: any) => procesarCausaIndividual(c.numeroProceso || c.idJuicio, baseUrl, apiKey, presupuesto.restante())
             );
 
             const causasConEstado: CausaConEstado[] = causasEncontradas.map((c: any, idx: number) => ({
@@ -335,8 +431,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           } catch (errPersona: any) {
             return { ...filaBase, error: errPersona?.message || String(errPersona) };
           }
-        })
-      );
+      });
 
       return res.status(200).json({ ok: true, total: filas.length, filas });
     }
@@ -362,6 +457,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           method: "POST",
           headers,
           body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+          signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
         });
         if (!resBuscar.ok) {
           return res.status(502).json({ ok: false, error: `No se pudo buscar procesos por cedula (HTTP ${resBuscar.status}).` });
@@ -418,6 +514,13 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       .map((c) => c.trim())
       .filter(Boolean);
 
+    if (listaCausas.length > LOTE_MAX_CAUSAS) {
+      return res.status(400).json({
+        ok: false,
+        error: `El lote supera el maximo de ${LOTE_MAX_CAUSAS} causas por consulta (recibidas ${listaCausas.length}). Dividelo en lotes mas pequenos.`,
+      });
+    }
+
     const baseUrl = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
     const apiKey = process.env.SATJE_API_KEY;
     if (!apiKey) {
@@ -429,8 +532,11 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
 
     // MODO BATCH (CONSULTA EN LOTE - PESTAÑA 2)
     if (esModoLote || listaCausas.length > 1) {
-      const resultadosLote = await Promise.all(
-        listaCausas.map((causaItem) => procesarCausaIndividual(causaItem, baseUrl, apiKey))
+      const presupuestoLote = crearPresupuesto(PRESUPUESTO_LOTE_MS);
+      const resultadosLote = await mapConcurrente(listaCausas, CONCURRENCIA_CAUSAS, (causaItem) =>
+        presupuestoLote.agotado()
+          ? Promise.resolve(resultadoNoProcesado(causaItem, "No procesado: se agoto el tiempo de la consulta en lote."))
+          : procesarCausaIndividual(causaItem, baseUrl, apiKey, presupuestoLote.restante())
       );
 
       if (wantsJson) {
