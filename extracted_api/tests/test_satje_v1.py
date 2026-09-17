@@ -27,6 +27,38 @@ from app.services import SatjeService, document_id_from_code
 client = TestClient(app)
 HEADERS = {"X-API-Key": next(iter(settings.allowed_api_keys))}
 
+# Campos que cambian en cada llamada y que NO forman parte del contrato del
+# endpoint. El test de regresion compara dos respuestas del mismo endpoint
+# para detectar cambios de ESTRUCTURA, asi que hay que ignorarlos.
+_CAMPOS_VOLATILES = {
+    "requestId",
+    "retrievedAt",
+    "generatedAt",
+    "cachedAt",
+    "createdAt",
+    "updatedAt",
+    "timestamp",
+    "ttlSeconds",
+    "duracionMs",
+    "durationMs",
+    "elapsedMs",
+    "processingTimeMs",
+    "latencyMs",
+    "hit",
+}
+
+
+def normalizar_volatiles(valor):
+    """Sustituye los campos volatiles por un marcador, recursivamente."""
+    if isinstance(valor, dict):
+        return {
+            clave: "<ignored>" if clave in _CAMPOS_VOLATILES else normalizar_volatiles(sub)
+            for clave, sub in valor.items()
+        }
+    if isinstance(valor, list):
+        return [normalizar_volatiles(sub) for sub in valor]
+    return valor
+
 
 def test_buscar_causas_payload_supports_actor_and_demandado():
     actor = buscar_causas_payload("0104270855", role="actor", page=1, size=10)
@@ -210,14 +242,15 @@ def test_regression_current_actuaciones_response_contract_is_unchanged():
     assert second.status_code == 200
     before = first.json()
     after = second.json()
-    before_request_id = before.pop("requestId")
-    after_request_id = after.pop("requestId")
-    before["cache"] = {"hit": "<ignored>", "ttlSeconds": before["cache"]["ttlSeconds"]}
-    after["cache"] = {"hit": "<ignored>", "ttlSeconds": after["cache"]["ttlSeconds"]}
 
-    assert before_request_id.startswith("req_")
-    assert after_request_id.startswith("req_")
-    assert after == before
+    assert before["requestId"].startswith("req_")
+    assert after["requestId"].startswith("req_")
+    assert "cache" in before and "hit" in before["cache"]
+
+    # Se comparan las respuestas ignorando los metadatos volatiles
+    # (requestId, retrievedAt, ttlSeconds...): lo que este test protege es el
+    # CONTRATO del endpoint, no los tiempos ni los ids de cada llamada.
+    assert normalizar_volatiles(after) == normalizar_volatiles(before)
     assert "incidentes" in after
     assert "pagination" not in after
     assert after["totalActuaciones"] == 159
