@@ -85,7 +85,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     esDeprecatorio: false
   };
 
-  const resumenHTML = resumenIA
+  const resumenHTML = escapeHtml(resumenIA)
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\n\n/g, '<br/><br/>')
     .replace(/\n/g, '<br/>');
@@ -176,7 +176,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.ok && res.respuesta) {
-          var formatted = res.respuesta
+          var formatted = esc(res.respuesta)
             .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
             .replace(/\\n\\n/g, '<br/><br/>')
             .replace(/\\n/g, '<br/>');
@@ -187,7 +187,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         msgs.scrollTop = msgs.scrollHeight;
       })
       .catch(function(err) {
-        aiBubble.innerHTML = "⚠️ Error de conexión con el Asistente de IA: " + err.message;
+        aiBubble.innerHTML = "⚠️ Error de conexión con el Asistente de IA: " + esc(err.message);
         msgs.scrollTop = msgs.scrollHeight;
       });
     };
@@ -215,24 +215,24 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (!res.ok) {
-          out.innerHTML = '⚠️ ' + (res.error || 'No se pudo completar la búsqueda.');
+          out.innerHTML = '⚠️ ' + (esc(res.error) || 'No se pudo completar la búsqueda.');
           return;
         }
         if (!res.candidatos || res.candidatos.length === 0) {
-          out.innerHTML = '<div style="color:var(--text-muted);">Asunto detectado: <strong>' + res.asuntoDetectado + '</strong>. No se encontraron causas nuevas con ese mismo asunto para esta cédula (de un total de ' + res.totalCausasCedula + ' causas revisadas).</div>';
+          out.innerHTML = '<div style="color:var(--text-muted);">Asunto detectado: <strong>' + esc(res.asuntoDetectado) + '</strong>. No se encontraron causas nuevas con ese mismo asunto para esta cédula (de un total de ' + esc(res.totalCausasCedula) + ' causas revisadas).</div>';
           return;
         }
-        var html = '<div style="color:#e2e8f0; margin-bottom:0.5rem;">Asunto detectado: <strong>' + res.asuntoDetectado + '</strong>. ' + res.candidatos.length + ' causa(s) candidata(s):</div>';
+        var html = '<div style="color:#e2e8f0; margin-bottom:0.5rem;">Asunto detectado: <strong>' + esc(res.asuntoDetectado) + '</strong>. ' + res.candidatos.length + ' causa(s) candidata(s):</div>';
         res.candidatos.forEach(function(c) {
           html += '<div style="padding:0.5rem 0.7rem; background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:0.4rem; margin-bottom:0.4rem;">' +
-            '<a href="/?causa=' + encodeURIComponent(c.numeroProceso) + '" style="color:var(--accent); font-weight:800; text-decoration:none;">' + c.numeroProceso + '</a>' +
-            '<div style="font-size:0.82rem; color:var(--text-muted);">📅 Ingreso: ' + (c.fechaIngreso || 'N/A') + ' · 🏛️ ' + (c.judicatura || 'N/A') + '</div>' +
+            '<a href="/?causa=' + encodeURIComponent(c.numeroProceso) + '" style="color:var(--accent); font-weight:800; text-decoration:none;">' + esc(c.numeroProceso) + '</a>' +
+            '<div style="font-size:0.82rem; color:var(--text-muted);">📅 Ingreso: ' + (esc(c.fechaIngreso) || 'N/A') + ' · 🏛️ ' + (esc(c.judicatura) || 'N/A') + '</div>' +
             '</div>';
         });
         out.innerHTML = html;
       })
       .catch(function(err) {
-        out.innerHTML = '⚠️ Error de conexión: ' + err.message;
+        out.innerHTML = '⚠️ Error de conexión: ' + esc(err.message);
       });
     };
 
@@ -276,7 +276,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (!res.ok) {
-          box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ ' + (res.error || 'No se pudo completar la consulta.') + '</div>';
+          box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ ' + (esc(res.error) || 'No se pudo completar la consulta.') + '</div>';
           return;
         }
         var filas = res.filas || [];
@@ -295,26 +295,26 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
 
         filas.forEach(function(f) {
           if (f.error) {
-            html += '<tr><td>' + f.cedula + '</td><td>' + f.nombres + '</td><td>' + f.apellidos + '</td><td>' + f.numeroOperacion + '</td>' +
-              '<td colspan="10" style="color:var(--danger);">⚠️ ' + f.error + '</td></tr>';
+            html += '<tr><td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
+              '<td colspan="10" style="color:var(--danger);">⚠️ ' + esc(f.error) + '</td></tr>';
             return;
           }
           if (f.sinCausaVigente) {
-            html += '<tr><td>' + f.cedula + '</td><td>' + f.nombres + '</td><td>' + f.apellidos + '</td><td>' + f.numeroOperacion + '</td>' +
+            html += '<tr><td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
               '<td colspan="10" style="color:var(--text-muted);">Sin juicio vigente (' + (f.totalCausasEncontradas || 0) + ' causa(s) encontradas, todas cerradas/abandonadas o ninguna causa)</td></tr>';
             return;
           }
           html += '<tr>' +
-            '<td>' + f.cedula + '</td><td>' + f.nombres + '</td><td>' + f.apellidos + '</td><td>' + f.numeroOperacion + '</td>' +
-            '<td><strong>' + (f.numeroProceso || '') + '</strong></td>' +
-            '<td>' + (f.etapaProcesalGeneral || 'No disponible') + '</td>' +
-            '<td style="font-size:0.85rem;">' + (f.etapaProcesalEspecifica || 'No disponible') + '</td>' +
-            '<td>' + (f.fechaInscripcionMedidaCautelar || 'No confirmada') + '</td>' +
-            '<td>' + (f.unidadJudicialDeprecadaDeudor || 'No disponible') + '</td>' +
-            '<td>' + (f.fechaCalificacionDeprecatorioDeu || 'No disponible') + '</td>' +
-            '<td>' + (f.unidadJudicialDeprecadaGarante || 'No disponible') + '</td>' +
-            '<td>' + (f.fechaCalificacionDeprecatorioGar || 'No disponible') + '</td>' +
-            '<td>' + (f.fechaDeEtapa || 'No disponible') + '</td>' +
+            '<td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
+            '<td><strong>' + esc(f.numeroProceso || '') + '</strong></td>' +
+            '<td>' + esc(f.etapaProcesalGeneral || 'No disponible') + '</td>' +
+            '<td style="font-size:0.85rem;">' + esc(f.etapaProcesalEspecifica || 'No disponible') + '</td>' +
+            '<td>' + esc(f.fechaInscripcionMedidaCautelar || 'No confirmada') + '</td>' +
+            '<td>' + esc(f.unidadJudicialDeprecadaDeudor || 'No disponible') + '</td>' +
+            '<td>' + esc(f.fechaCalificacionDeprecatorioDeu || 'No disponible') + '</td>' +
+            '<td>' + esc(f.unidadJudicialDeprecadaGarante || 'No disponible') + '</td>' +
+            '<td>' + esc(f.fechaCalificacionDeprecatorioGar || 'No disponible') + '</td>' +
+            '<td>' + esc(f.fechaDeEtapa || 'No disponible') + '</td>' +
             '<td><a href="/?causa=' + encodeURIComponent(f.numeroProceso || '') + '" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>' +
           '</tr>';
         });
@@ -323,7 +323,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         box.innerHTML = html;
       })
       .catch(function(err) {
-        box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ Error de conexión: ' + err.message + '</div>';
+        box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ Error de conexión: ' + esc(err.message) + '</div>';
       });
     };
 
@@ -827,7 +827,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
                 <div style="font-size:0.85rem; font-weight:800; color:var(--success); margin-bottom:0.5rem;">🔍 Precedentes / Causas Semánticamente Similares Encontradas:</div>
                 ${vectorDbStatus.precedentes.map((p: any) => `
                   <div style="font-size:0.88rem; color:#cbd5e1; margin-bottom:0.4rem;">
-                    🔹 <strong>Causa ${p.metadata?.causa || p.id}:</strong> ${p.metadata?.etapa || 'Proceso'} (Similitud: ${Math.round((p.score || 0.9) * 100)}%)
+                    🔹 <strong>Causa ${escapeHtml(p.metadata?.causa || p.id)}:</strong> ${escapeHtml(p.metadata?.etapa || 'Proceso')} (Similitud: ${Math.round((p.score || 0.9) * 100)}%)
                   </div>
                 `).join('')}
               </div>
@@ -842,14 +842,14 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             </div>
 
             <div class="kpi-main-title" style="font-size:1.6rem; color:var(--accent);">
-              ${etapa.etapaGeneral}
+              ${escapeHtml(etapa.etapaGeneral)}
             </div>
 
             <div style="font-size:1.15rem; font-weight:800; color:#fff; margin-top:0.4rem;">
-              🔹 Etapa Específica: <span style="color:#e2e8f0;">${etapa.etapaEspecifica}</span>
+              🔹 Etapa Específica: <span style="color:#e2e8f0;">${escapeHtml(etapa.etapaEspecifica)}</span>
             </div>
 
-            <p style="font-size:0.95rem; color:#cbd5e1; margin-top:0.6rem;">${etapa.explicacion}</p>
+            <p style="font-size:0.95rem; color:#cbd5e1; margin-top:0.6rem;">${escapeHtml(etapa.explicacion)}</p>
           </div>
 
           <!-- PANEL 1: ESTADO DE SENTENCIA -->
@@ -864,7 +864,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             </div>
             <div>
               ${poseeSentencia && fechaSentencia ? `
-                <div class="kpi-date-badge">📅 Fecha Sentencia: ${fechaSentencia}</div>
+                <div class="kpi-date-badge">📅 Fecha Sentencia: ${escapeHtml(fechaSentencia)}</div>
               ` : `
                 <div class="kpi-subtext">No se registra resolución final o sentencia ejecutoriada en este proceso hasta la fecha.</div>
               `}
@@ -882,12 +882,12 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
               </div>
 
               <div class="kpi-main-title">
-                ${cautelar.medidaDetectada ? cautelar.tipoMedida : 'Sin Registro de Medida Cautelar'}
+                ${cautelar.medidaDetectada ? escapeHtml(cautelar.tipoMedida) : 'Sin Registro de Medida Cautelar'}
               </div>
 
               ${cautelar.medidaDetectada ? `
                 <div style="font-size:0.88rem; color:var(--text-muted); margin-bottom:0.5rem;">
-                  🏛️ Institución Ejecutora: <strong>${cautelar.institucionEjecutora}</strong>
+                  🏛️ Institución Ejecutora: <strong>${escapeHtml(cautelar.institucionEjecutora)}</strong>
                 </div>
 
                 <!-- STEPPER DE CICLO DE VIDA -->
@@ -914,31 +914,31 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
                 <div class="fechas-grid-cuatro">
                   <div>
                     <div class="fecha-item-title">1. Orden Judicial (Juez)</div>
-                    <div class="fecha-item-val">${cautelar.fechaOrdenJudicial || 'Pendiente'}</div>
+                    <div class="fecha-item-val">${escapeHtml(cautelar.fechaOrdenJudicial || 'Pendiente')}</div>
                   </div>
                   <div>
                     <div class="fecha-item-title">2. Oficio Emitido</div>
-                    <div class="fecha-item-val" style="color:var(--accent);">${cautelar.fechaOficio || 'Pendiente'}</div>
+                    <div class="fecha-item-val" style="color:var(--accent);">${escapeHtml(cautelar.fechaOficio || 'Pendiente')}</div>
                   </div>
                   <div>
                     <div class="fecha-item-title">3. Inscripción Real Registral</div>
-                    <div class="fecha-item-val" style="color:${cautelar.fechaInscripcion ? 'var(--danger)' : 'var(--text-muted)'};">${cautelar.fechaInscripcion || 'No confirmada'}</div>
+                    <div class="fecha-item-val" style="color:${cautelar.fechaInscripcion ? 'var(--danger)' : 'var(--text-muted)'};">${escapeHtml(cautelar.fechaInscripcion || 'No confirmada')}</div>
                   </div>
                   <div>
                     <div class="fecha-item-title">4. Registro en SATJE</div>
-                    <div class="fecha-item-val">${cautelar.fechaActuacionSatje || 'Pendiente'}</div>
+                    <div class="fecha-item-val">${escapeHtml(cautelar.fechaActuacionSatje || 'Pendiente')}</div>
                   </div>
                 </div>
 
                 <div class="ocr-box">
                   🔍 <strong>Evidencia y Razón Registral:</strong><br/>
-                  ${cautelar.evidenciaTextual}
-                  ${cautelar.numeroRepertorio ? `<br/><br/>📌 <strong>N° Repertorio / Registro:</strong> ${cautelar.numeroRepertorio}` : ''}
-                  ${cautelar.fuente.archivo ? `<br/>📎 <strong>Documento Adjunto SATJE:</strong> ${cautelar.fuente.archivo}` : ''}
+                  ${escapeHtml(cautelar.evidenciaTextual)}
+                  ${cautelar.numeroRepertorio ? `<br/><br/>📌 <strong>N° Repertorio / Registro:</strong> ${escapeHtml(cautelar.numeroRepertorio)}` : ''}
+                  ${cautelar.fuente.archivo ? `<br/>📎 <strong>Documento Adjunto SATJE:</strong> ${escapeHtml(cautelar.fuente.archivo)}` : ''}
                 </div>
 
                 <div class="advice-box">
-                  💡 <strong>Estrategia Legal Sugerida:</strong> ${cautelar.recomendacionEstrategica}
+                  💡 <strong>Estrategia Legal Sugerida:</strong> ${escapeHtml(cautelar.recomendacionEstrategica)}
                 </div>
               ` : `
                 <div class="kpi-subtext">No se detectaron inscripciones de embargo, prohibición de enajenar o retención en las actuaciones ni adjuntos.</div>
@@ -950,7 +950,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <div class="kpi-card abandono-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div class="kpi-tag ${abandono.badgeClass}">
-                ${abandono.etiqueta}
+                ${escapeHtml(abandono.etiqueta)}
               </div>
               <span style="font-size:0.82rem; font-weight:700; color:var(--text-muted);">Sustento Legal: COGEP Art. 245 - 247</span>
             </div>
@@ -959,7 +959,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
               ⏱️ Sistema de Alerta Preventiva de Abandono Procesal
             </div>
 
-            <p style="font-size:0.98rem; color:#cbd5e1; margin-top:0.4rem;">${abandono.explicacion}</p>
+            <p style="font-size:0.98rem; color:#cbd5e1; margin-top:0.4rem;">${escapeHtml(abandono.explicacion)}</p>
 
             ${abandono.diasRestantes <= 180 && abandono.diasRestantes >= 0 ? `
             <div class="abandono-gauge-container">
@@ -975,18 +975,18 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
 
             ${abandono.relojDeprecatorioInfo ? `
               <div style="font-size:0.88rem; color:var(--accent); font-weight:700; margin-top:0.6rem;">
-                ${abandono.relojDeprecatorioInfo}
+                ${escapeHtml(abandono.relojDeprecatorioInfo)}
               </div>
             ` : ''}
 
             <div class="abandono-stats">
               <div>
                 <div class="abandono-item-title">Última Actuación Útil</div>
-                <div class="abandono-item-val">📅 ${abandono.fechaUltimaActuacion}</div>
+                <div class="abandono-item-val">📅 ${escapeHtml(abandono.fechaUltimaActuacion)}</div>
               </div>
               <div>
                 <div class="abandono-item-title">Límite Abandono (6 Meses)</div>
-                <div class="abandono-item-val">📅 ${abandono.fechaReferencialAbandono}</div>
+                <div class="abandono-item-val">📅 ${escapeHtml(abandono.fechaReferencialAbandono)}</div>
               </div>
               <div>
                 <div class="abandono-item-title">Días Restantes Procesales</div>
@@ -1048,12 +1048,12 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             ${actuaciones.map((a: any) => `
               <div class="timeline-item">
                 <div class="timeline-header">
-                  <span>📅 ${a.fecha || a.fechaProvidencia || a.fechaActuacion || 'Sin fecha'}</span>
-                  <span class="badge">${a.tipo || 'ACTUACIÓN'}</span>
+                  <span>📅 ${escapeHtml(a.fecha || a.fechaProvidencia || a.fechaActuacion || 'Sin fecha')}</span>
+                  <span class="badge">${escapeHtml(a.tipo || 'ACTUACIÓN')}</span>
                 </div>
-                <div class="timeline-title">${a.actividad || a.nombreActuacion || a.titulo || a.observacion || 'Actuación judicial'}</div>
-                ${a.nombreJudicatura ? `<div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.4rem;">🏛️ Judicatura: ${a.nombreJudicatura}</div>` : ''}
-                ${a.nombreArchivo ? `<div style="font-size:0.85rem; color:var(--accent); margin-top:0.4rem; font-weight:600;">📎 Documento Adjunto: ${a.nombreArchivo}</div>` : ''}
+                <div class="timeline-title">${escapeHtml(a.actividad || a.nombreActuacion || a.titulo || a.observacion || 'Actuación judicial')}</div>
+                ${a.nombreJudicatura ? `<div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.4rem;">🏛️ Judicatura: ${escapeHtml(a.nombreJudicatura)}</div>` : ''}
+                ${a.nombreArchivo ? `<div style="font-size:0.85rem; color:var(--accent); margin-top:0.4rem; font-weight:600;">📎 Documento Adjunto: ${escapeHtml(a.nombreArchivo)}</div>` : ''}
               </div>
             `).join('')}
           </div>
@@ -1106,14 +1106,14 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
               <tbody>
                 ${resultadosLote.map((item: any) => `
                   <tr>
-                    <td><strong>${item.causa}</strong></td>
-                    <td><span class="kpi-tag accent">${item.etapaProcesalGeneral}</span></td>
-                    <td style="font-size:0.85rem;">${item.etapaProcesalEspecifica}</td>
+                    <td><strong>${escapeHtml(item.causa)}</strong></td>
+                    <td><span class="kpi-tag accent">${escapeHtml(item.etapaProcesalGeneral)}</span></td>
+                    <td style="font-size:0.85rem;">${escapeHtml(item.etapaProcesalEspecifica)}</td>
                     <td>${item.poseeSentencia ? '🟢 SÍ' : '🔴 NO'}</td>
                     <td><span class="kpi-tag ${estadoBadgeClass[item.estadoCicloVidaMedida] || 'muted'}">${estadoTextos[item.estadoCicloVidaMedida] || '⚪ Sin Medida'}</span></td>
-                    <td style="font-weight:700; color:var(--accent);">${item.fechaInscripcionMedida || 'No confirmada'}</td>
-                    <td><span class="kpi-tag ${item.alertaAbandonoObjeto.badgeClass}">${item.alertaAbandono}</span></td>
-                    <td><a href="/?causa=${item.causa}" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>
+                    <td style="font-weight:700; color:var(--accent);">${escapeHtml(item.fechaInscripcionMedida || 'No confirmada')}</td>
+                    <td><span class="kpi-tag ${item.alertaAbandonoObjeto.badgeClass}">${escapeHtml(item.alertaAbandono)}</span></td>
+                    <td><a href="/?causa=${escapeHtml(item.causa)}" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>
                   </tr>
                 `).join('')}
               </tbody>
