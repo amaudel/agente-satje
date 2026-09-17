@@ -39,9 +39,6 @@ export async function procesarCausaIndividual(
 
   let actuaciones: any[] = [];
   const intentosBackend: { etapa: string; ok: boolean; detalle: string }[] = [];
-  console.log(
-    `[satje] inicio causa=${causaFormateada} baseUrl=${baseUrl} presupuesto=${Math.max(MIN_TIMEOUT_MS, Math.min(presupuestoMs, PRESUPUESTO_POR_CAUSA_MS))}ms`
-  );
 
   // Cada intento queda acotado por el timeout del paso Y por el presupuesto
   // total de la causa: nunca puede colgarse indefinidamente.
@@ -59,17 +56,11 @@ export async function procesarCausaIndividual(
     try {
       const res = await fetch(url, { ...opciones, signal: signalPara(topeMs) });
       if (!res.ok) {
-        console.log(`[satje] ${etapa} HTTP ${res.status} (no ok)`);
         intentosBackend.push({ etapa, ok: false, detalle: `HTTP ${res.status}` });
         return null;
       }
       const datos: any = await res.json();
       const extraidas = extraerTodasLasActuaciones(datos);
-      // Diagnostico: solo la FORMA de la respuesta, nunca su contenido.
-      const forma = Array.isArray(datos)
-        ? `array(${datos.length})`
-        : `objeto{${Object.keys(datos || {}).slice(0, 12).join(",")}}`;
-      console.log(`[satje] ${etapa} HTTP ${res.status} forma=${forma} extraidas=${extraidas.length}`);
       intentosBackend.push({ etapa, ok: true, detalle: `HTTP ${res.status}` });
       return extraidas;
     } catch (e: any) {
@@ -77,7 +68,6 @@ export async function procesarCausaIndividual(
         e?.name === "TimeoutError"
           ? `timeout tras ${topeEfectivo} ms`
           : e?.message || String(e);
-      console.log(`[satje] ${etapa} ERROR ${motivo}`);
       intentosBackend.push({ etapa, ok: false, detalle: motivo });
       return null;
     }
@@ -134,9 +124,12 @@ export async function procesarCausaIndividual(
       ? intentosBackend.map((i) => `${i.etapa}: ${i.detalle}`).join(" | ")
       : null;
 
-  console.log(
-    `[satje] fin causa=${causaFormateada} actuaciones=${actuaciones.length} backendError=${backendError ? "SI" : "no"} intentos=${JSON.stringify(intentosBackend)}`
-  );
+  // Solo se registra cuando TODOS los intentos fallan: es el caso que
+  // interesa para diagnosticar caidas del backend, y no ensucia los logs
+  // en el uso normal.
+  if (backendError) {
+    console.error(`[satje] fallo causa=${causaFormateada} intentos=${JSON.stringify(intentosBackend)}`);
+  }
 
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
