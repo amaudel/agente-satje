@@ -12,7 +12,9 @@ import {
 // Vercel mate el proceso a mitad de camino y el usuario vea un error de red.
 const PRESUPUESTO_POR_CAUSA_MS = 45000;
 const TIMEOUT_AGENT_MS = 30000;
-const TIMEOUT_ACTUACIONES_MS = 15000;
+// El backend consulta SATJE en vivo (via conector Apify) y puede tardar
+// bastante mas que el endpoint agent/satje, que responde de cache.
+const TIMEOUT_ACTUACIONES_MS = 30000;
 const MIN_TIMEOUT_MS = 2000;
 
 export async function procesarCausaIndividual(
@@ -91,7 +93,7 @@ export async function procesarCausaIndividual(
         query: causaFormateada,
         tipoBusqueda: "auto",
         incluirActuaciones: true,
-        maxActuaciones: 40,
+        maxActuaciones: 20,
       }),
     },
     TIMEOUT_AGENT_MS
