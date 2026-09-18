@@ -696,43 +696,39 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       if (openaiKey) {
         try {
           const openai = new OpenAI({ apiKey: openaiKey });
-          const embRes = await openai.embeddings.create({
-            model: "text-embedding-3-small",
-            input: textoParaVector,
-          });
-          vector = embRes.data[0]?.embedding;
-
-          if (cautelarData.medidaDetectada) {
-            const embMedida = await openai.embeddings.create({
-              model: "text-embedding-3-small",
-              input: textoMedidaVector,
-            });
-            vectorMedida = embMedida.data[0]?.embedding;
-          }
+          // Los dos embeddings van EN PARALELO: antes iban en fila y se pagaba
+          // dos veces el viaje de ida y vuelta a OpenAI. allSettled para que
+          // el fallo de uno no tumbe al otro.
+          const [embCausa, embMedida] = await Promise.allSettled([
+            openai.embeddings.create({ model: "text-embedding-3-small", input: textoParaVector }),
+            cautelarData.medidaDetectada
+              ? openai.embeddings.create({ model: "text-embedding-3-small", input: textoMedidaVector })
+              : Promise.resolve(null),
+          ]);
+          if (embCausa.status === "fulfilled") vector = embCausa.value.data[0]?.embedding;
+          if (embMedida.status === "fulfilled" && embMedida.value) vectorMedida = embMedida.value.data[0]?.embedding;
         } catch (eEmb) {}
       }
 
       // 1. Buscar precedentes o causas similares en Upstash Vector
       if (vector) {
-        const queryResults = await queryUpstashVector(
-          upstashUrl,
-          upstashToken,
-          { vector },
-          3
-        );
+        // Indexar la causa no aporta nada a ESTA respuesta, asi que corre en
+        // paralelo con la busqueda en vez de bloquearla. El orden da igual:
+        // el filtro de abajo ya descarta el registro propio.
+        const [queryResults] = await Promise.all([
+          queryUpstashVector(upstashUrl, upstashToken, { vector }, 3),
+          upsertUpstashVector(upstashUrl, upstashToken, {
+            id: `causa-${resultadoIndividual.causa}`,
+            vector,
+            metadata: {
+              causa: resultadoIndividual.causa,
+              etapa: resultadoIndividual.etapaProcesalGeneral,
+              medida: resultadoIndividual.estadoCicloVidaMedida,
+              timestamp: new Date().toISOString(),
+            },
+          }),
+        ]);
         vectorDbStatus.precedentes = queryResults.filter(r => r.id !== `causa-${resultadoIndividual.causa}` && r.id !== `medida-${resultadoIndividual.causa}`);
-
-        // Indexar la causa general en Upstash Vector
-        await upsertUpstashVector(upstashUrl, upstashToken, {
-          id: `causa-${resultadoIndividual.causa}`,
-          vector,
-          metadata: {
-            causa: resultadoIndividual.causa,
-            etapa: resultadoIndividual.etapaProcesalGeneral,
-            medida: resultadoIndividual.estadoCicloVidaMedida,
-            timestamp: new Date().toISOString(),
-          },
-        });
       }
 
       // 2. RAG ESPECIALIZADO DE MEDIDAS CAUTELARES Y RECUPERACIÓN DE FECHA DE INSCRIPCIÓN
