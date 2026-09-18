@@ -17,6 +17,10 @@ const TIMEOUT_AGENT_MS = 30000;
 const TIMEOUT_ACTUACIONES_MS = 30000;
 const MIN_TIMEOUT_MS = 2000;
 
+// A partir de aqui la consulta se considera lenta y se registra su duracion
+// y por que via se resolvio (o por que fallo).
+const UMBRAL_LOG_MS = 8000;
+
 export async function procesarCausaIndividual(
   causaInput: string,
   baseUrl: string,
@@ -73,47 +77,53 @@ export async function procesarCausaIndividual(
     }
   }
 
-  const rAgent = await intentar(
-    "agent/satje",
-    `${baseUrl}/api/v1/agent/satje`,
-    {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        // El backend no sabe interpretar "01333-2025-08870": su deteccion
-        // automatica exige grupos de 11+ digitos y los guiones los parten,
-        // asi que devolvia 422 en TODAS las consultas. Se envia el numero
-        // sin guiones y con tipoBusqueda explicito.
-        query: causaSinGuiones || causaFormateada,
-        tipoBusqueda: "proceso",
-        incluirActuaciones: true,
-        maxActuaciones: 20,
-      }),
-    },
-    TIMEOUT_AGENT_MS
-  );
-  if (rAgent) actuaciones = rAgent;
-
-  // El endpoint /causas/{id}/actuaciones espera el id SIN guiones: con
-  // guiones devuelve 404. Por eso ese formato se intenta primero.
-  if (actuaciones.length === 0 && causaSinGuiones) {
-    const r1 = await intentar(
+  // ORDEN: primero /causas/{id}/actuaciones, que devuelve el expediente
+  // COMPLETO (128 actuaciones frente a las 20 del agente) y ademas deja el
+  // resultado en la cache del backend, lo que abarata las llamadas
+  // siguientes. agent/satje queda como respaldo: solo devuelve un resumen,
+  // que el extractor no reconoce (daba extraidas=0).
+  // Ojo: este endpoint espera el id SIN guiones; con guiones da 404.
+  if (causaSinGuiones) {
+    const rAct = await intentar(
       "causas/actuaciones",
       `${baseUrl}/api/v1/causas/${encodeURIComponent(causaSinGuiones)}/actuaciones`,
       { headers },
       TIMEOUT_ACTUACIONES_MS
     );
-    if (r1) actuaciones = r1;
+    if (rAct) actuaciones = rAct;
+  }
+
+  if (actuaciones.length === 0) {
+    const rAgent = await intentar(
+      "agent/satje",
+      `${baseUrl}/api/v1/agent/satje`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          // El backend no sabe interpretar "01333-2025-08870": su deteccion
+          // automatica exige grupos de 11+ digitos y los guiones los parten,
+          // asi que devolvia 422 en TODAS las consultas. Se envia el numero
+          // sin guiones y con tipoBusqueda explicito.
+          query: causaSinGuiones || causaFormateada,
+          tipoBusqueda: "proceso",
+          incluirActuaciones: true,
+          maxActuaciones: 20,
+        }),
+      },
+      TIMEOUT_AGENT_MS
+    );
+    if (rAgent) actuaciones = rAgent;
   }
 
   if (actuaciones.length === 0 && causaFormateada !== causaSinGuiones) {
-    const r2 = await intentar(
+    const rDashed = await intentar(
       "causas/actuaciones (con guiones)",
       `${baseUrl}/api/v1/causas/${encodeURIComponent(causaFormateada)}/actuaciones`,
       { headers },
       TIMEOUT_ACTUACIONES_MS
     );
-    if (r2) actuaciones = r2;
+    if (rDashed) actuaciones = rDashed;
   }
 
   // Si no hubo actuaciones Y ningun intento llego a responder con exito, es una
@@ -124,11 +134,15 @@ export async function procesarCausaIndividual(
       ? intentosBackend.map((i) => `${i.etapa}: ${i.detalle}`).join(" | ")
       : null;
 
-  // Solo se registra cuando TODOS los intentos fallan: es el caso que
-  // interesa para diagnosticar caidas del backend, y no ensucia los logs
+  // Se registra solo si hubo fallo o si la consulta fue lenta: es la
+  // informacion util para vigilar el rendimiento, sin ensuciar los logs
   // en el uso normal.
-  if (backendError) {
-    console.error(`[satje] fallo causa=${causaFormateada} intentos=${JSON.stringify(intentosBackend)}`);
+  const duracionMs = Date.now() - inicio;
+  if (backendError || duracionMs > UMBRAL_LOG_MS) {
+    const via = intentosBackend.filter((i) => i.ok).map((i) => i.etapa).join(" + ") || "ninguna";
+    console.error(
+      `[satje] causa=${causaFormateada} ${duracionMs}ms actuaciones=${actuaciones.length} via=${via}${backendError ? " FALLO " + backendError : ""}`
+    );
   }
 
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);

@@ -574,7 +574,9 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
 
     // MODO INDIVIDUAL (PESTAÑA 1)
     const causaInput = listaCausas[0];
+    const tFaseSatje = Date.now();
     const resultadoIndividual = await procesarCausaIndividual(causaInput, baseUrl, apiKey);
+    const msSatje = Date.now() - tFaseSatje;
     const actuaciones = resultadoIndividual.actuaciones;
 
     const indicadoresEncontrados: Record<string, any[]> = {
@@ -596,6 +598,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     let resumenIA = resultadoIndividual.backendError
       ? `⚠️ No se pudo consultar la API de SATJE para la causa ${resultadoIndividual.causa} (${resultadoIndividual.backendError}). Esto es una falla de conexión, no significa que la causa esté vacía — intenta de nuevo en unos minutos.`
       : `La causa número ${resultadoIndividual.causa} no registra actuaciones en la API del SATJE en este momento.`;
+    const tFaseIA = Date.now();
     if (actuaciones.length > 0 && openaiKey) {
       try {
         const openai = new OpenAI({ apiKey: openaiKey });
@@ -626,6 +629,7 @@ Analiza las actuaciones y responde con precisión:
         resumenIA = `Error al generar resumen IA: ${errOpenAi.message || errOpenAi}`;
       }
     }
+    const msIA = Date.now() - tFaseIA;
 
     // SINCRONIZACIÓN Y BÚSQUEDA EN UPSTASH VECTOR DB (1536-dim Embedding + RAG MEDIDAS CAUTELARES)
     let vectorDbStatus = {
@@ -634,6 +638,7 @@ Analiza las actuaciones y responde con precisión:
       recuperacionMedidaRag: false,
     };
 
+    const tFaseVector = Date.now();
     if (upstashUrl && upstashToken && !resultadoIndividual.backendError) {
       vectorDbStatus.activo = true;
       const textoParaVector = `Causa: ${resultadoIndividual.causa}. Etapa: ${resultadoIndividual.etapaProcesalGeneral} - ${resultadoIndividual.etapaProcesalEspecifica}. Medida: ${resultadoIndividual.tipoMedida} (${resultadoIndividual.estadoCicloVidaMedida}). ${resumenIA.slice(0, 300)}`;
@@ -727,6 +732,8 @@ Analiza las actuaciones y responde con precisión:
         });
       }
     }
+
+    console.log(`[perf] ${resultadoIndividual.causa} satje=${msSatje}ms ia=${msIA}ms vector=${Date.now() - tFaseVector}ms`);
 
     const payloadRespuesta = {
       ok: true,
