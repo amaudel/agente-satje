@@ -77,6 +77,40 @@ function resultadoNoProcesado(causa: string, motivo: string): ResultadoCausa {
   return fila;
 }
 
+// Genera el resumen ejecutivo con OpenAI. Vive aparte porque tarda 7-9 s:
+// la pagina lo pide a ?action=resumen-ia DESPUES de dibujarse, en vez de
+// bloquear el render esperandolo.
+async function generarResumenIA(
+  openaiKey: string,
+  resultado: Awaited<ReturnType<typeof procesarCausaIndividual>>
+): Promise<string> {
+  const openai = new OpenAI({ apiKey: openaiKey });
+  const promptSistema = `Eres un agente experto en análisis jurídico procesal en Ecuador (SATJE).
+Analiza las actuaciones y responde con precisión:
+1. Revisa e indica la ETAPA PROCESAL GENERAL Y ESPECÍFICA según la taxonomía judicial de Ecuador.
+2. Revisa e indica si existe SENTENCIA emitida en el expediente.
+3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
+4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
+5. Entrega un Resumen Ejecutivo del proceso (2-3 oraciones) y la próxima acción legal sugerida.`;
+
+  const muestraActuaciones = resultado.actuaciones.slice(0, 25);
+  const cv = resultado.cicloVidaMedida;
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [
+      { role: "system", content: promptSistema },
+      {
+        role: "user",
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Inscrita: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Abandono (COGEP): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días restantes)\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+      },
+    ],
+    temperature: 0.2,
+    max_tokens: 900,
+  });
+
+  return completion.choices[0]?.message?.content || "Sin respuesta del modelo.";
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -487,6 +521,35 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       }
     }
 
+    // 2e. RESUMEN EJECUTIVO CON IA (2e). Se pide por separado para no
+    // bloquear el render: es el 80% del tiempo de respuesta.
+    if (req.query.action === "resumen-ia" || bodyData.action === "resumen-ia") {
+      const causaResumen = String(req.query.causa || bodyData.causa || "").trim();
+      if (!causaResumen) return res.status(400).json({ ok: false, error: "Falta la causa." });
+      if (!openaiKey) return res.status(500).json({ ok: false, error: "API Key de OpenAI no configurada." });
+
+      const baseUrlResumen = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKeyResumen = process.env.SATJE_API_KEY;
+      if (!apiKeyResumen) return res.status(500).json({ ok: false, error: "SATJE_API_KEY no esta configurado en el servidor." });
+
+      try {
+        const resultadoResumen = await procesarCausaIndividual(causaResumen, baseUrlResumen, apiKeyResumen);
+        if (resultadoResumen.backendError) {
+          return res.status(502).json({
+            ok: false,
+            error: `No se pudo consultar el expediente (${resultadoResumen.backendError}).`,
+          });
+        }
+        if (resultadoResumen.actuaciones.length === 0) {
+          return res.status(404).json({ ok: false, error: "El expediente no registra actuaciones." });
+        }
+        const resumen = await generarResumenIA(openaiKey, resultadoResumen);
+        return res.status(200).json({ ok: true, resumen });
+      } catch (errResumen: any) {
+        return res.status(500).json({ ok: false, error: errResumen?.message || String(errResumen) });
+      }
+    }
+
     let causasRaw = "";
     let esModoLote = false;
 
@@ -598,38 +661,11 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     let resumenIA = resultadoIndividual.backendError
       ? `⚠️ No se pudo consultar la API de SATJE para la causa ${resultadoIndividual.causa} (${resultadoIndividual.backendError}). Esto es una falla de conexión, no significa que la causa esté vacía — intenta de nuevo en unos minutos.`
       : `La causa número ${resultadoIndividual.causa} no registra actuaciones en la API del SATJE en este momento.`;
-    const tFaseIA = Date.now();
-    if (actuaciones.length > 0 && openaiKey) {
-      try {
-        const openai = new OpenAI({ apiKey: openaiKey });
-        const promptSistema = `Eres un agente experto en análisis jurídico procesal en Ecuador (SATJE).
-Analiza las actuaciones y responde con precisión:
-1. Revisa e indica la ETAPA PROCESAL GENERAL Y ESPECÍFICA según la taxonomía judicial de Ecuador.
-2. Revisa e indica si existe SENTENCIA emitida en el expediente.
-3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
-4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
-5. Entrega un Resumen Ejecutivo del proceso (2-3 oraciones) y la próxima acción legal sugerida.`;
-
-        const muestraActuaciones = actuaciones.slice(0, 25);
-        const completion = await openai.chat.completions.create({
-          model: "gpt-4o-mini",
-          messages: [
-            { role: "system", content: promptSistema },
-            {
-              role: "user",
-              content: `Número de Causa: ${resultadoIndividual.causa}\nTotal Actuaciones: ${actuaciones.length}\nEtapa General: ${resultadoIndividual.etapaProcesalGeneral}\nEtapa Específica: ${resultadoIndividual.etapaProcesalEspecifica}\nPosee Sentencia: ${resultadoIndividual.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Inscrita: ${resultadoIndividual.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${resultadoIndividual.cicloVidaMedida.estadoCicloVida}\nConfianza: ${resultadoIndividual.cicloVidaMedida.confianza}\nFecha Orden Judicial: ${resultadoIndividual.cicloVidaMedida.fechaOrdenJudicial}\nFecha Oficio: ${resultadoIndividual.cicloVidaMedida.fechaOficio}\nFecha Inscripción Registral: ${resultadoIndividual.fechaInscripcionMedida}\nEstrategia Sugerida: ${resultadoIndividual.cicloVidaMedida.recomendacionEstrategica}\nEstado Alerta Abandono (COGEP): ${resultadoIndividual.alertaAbandono} (${resultadoIndividual.diasRestantesAbandono} días restantes)\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
-            },
-          ],
-          temperature: 0.2,
-          max_tokens: 900,
-        });
-
-        resumenIA = completion.choices[0]?.message?.content || "Sin respuesta del modelo.";
-      } catch (errOpenAi: any) {
-        resumenIA = `Error al generar resumen IA: ${errOpenAi.message || errOpenAi}`;
-      }
-    }
-    const msIA = Date.now() - tFaseIA;
+    // El resumen NO se genera aqui: tarda 7-9 s (medido) y bloqueaba el
+    // dibujado. La pagina lo pide aparte a ?action=resumen-ia y se rellena
+    // sola cuando llega.
+    const msIA = 0;
+    const resumenPendiente = Boolean(openaiKey) && actuaciones.length > 0;
 
     // SINCRONIZACIÓN Y BÚSQUEDA EN UPSTASH VECTOR DB (1536-dim Embedding + RAG MEDIDAS CAUTELARES)
     let vectorDbStatus = {
@@ -641,7 +677,15 @@ Analiza las actuaciones y responde con precisión:
     const tFaseVector = Date.now();
     if (upstashUrl && upstashToken && !resultadoIndividual.backendError) {
       vectorDbStatus.activo = true;
-      const textoParaVector = `Causa: ${resultadoIndividual.causa}. Etapa: ${resultadoIndividual.etapaProcesalGeneral} - ${resultadoIndividual.etapaProcesalEspecifica}. Medida: ${resultadoIndividual.tipoMedida} (${resultadoIndividual.estadoCicloVidaMedida}). ${resumenIA.slice(0, 300)}`;
+      // El resumen de IA aun no existe (se genera aparte), asi que el texto
+      // indexado usa las ultimas actuaciones en su lugar.
+      const ultimasParaVector = actuaciones
+        .slice(0, 5)
+        .map((a: any) => String(a.actividad || a.nombreActuacion || a.tipo || "").trim())
+        .filter(Boolean)
+        .join(" | ")
+        .slice(0, 300);
+      const textoParaVector = `Causa: ${resultadoIndividual.causa}. Etapa: ${resultadoIndividual.etapaProcesalGeneral} - ${resultadoIndividual.etapaProcesalEspecifica}. Medida: ${resultadoIndividual.tipoMedida} (${resultadoIndividual.estadoCicloVidaMedida}).${ultimasParaVector ? ` Ultimas actuaciones: ${ultimasParaVector}` : ""}`;
 
       const cautelarData = resultadoIndividual.cicloVidaMedida;
       const textoMedidaVector = `Medida Cautelar Causa: ${resultadoIndividual.causa}. Tipo: ${resultadoIndividual.tipoMedida}. Institucion: ${cautelarData.institucionEjecutora}. Estado: ${resultadoIndividual.estadoCicloVidaMedida}. Fecha Orden: ${cautelarData.fechaOrdenJudicial}. Fecha Oficio: ${cautelarData.fechaOficio}. Fecha Inscripcion: ${resultadoIndividual.fechaInscripcionMedida || 'Pendiente'}. Repertorio: ${cautelarData.numeroRepertorio || 'N/A'}. Evidencia Registral: ${cautelarData.evidenciaTextual}`;
@@ -769,6 +813,7 @@ Analiza las actuaciones y responde con precisión:
       alerta_abandono: resultadoIndividual.alertaAbandonoObjeto,
       total_actuaciones: actuaciones.length,
       resumen_ejecutivo_ia: resumenIA,
+      resumen_pendiente: resumenPendiente,
       vector_db_status: vectorDbStatus,
       resumen_indicadores: {
         medidas_cautelares_count: indicadoresEncontrados.medidas_cautelares.length,

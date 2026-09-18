@@ -23,6 +23,9 @@ function jsString(value: unknown): string {
 export function generarDashboardHTML(datos: any, esLote: boolean = false, resultadosLote: any[] = []): string {
   const causa = datos?.causa || "";
   const resumenIA = datos?.resumen_ejecutivo_ia || "No se ha realizado análisis aún.";
+  // Si viene marcado, el resumen se esta generando aparte y la pagina
+  // lo pedira sola al cargar (ver cargarResumenIA).
+  const resumenPendiente = datos?.resumen_pendiente === true;
   const total = datos?.total_actuaciones || 0;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
@@ -191,6 +194,40 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         msgs.scrollTop = msgs.scrollHeight;
       });
     };
+
+    // RESUMEN EJECUTIVO DE IA: se pide aparte porque tarda 7-9 s (el 80% del
+    // tiempo de respuesta). El dashboard se dibuja sin esperarlo y este
+    // recuadro se rellena solo cuando llega.
+    function formatoIA(texto) {
+      return esc(texto)
+        .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
+        .replace(/\\n\\n/g, '<br/><br/>')
+        .replace(/\\n/g, '<br/>');
+    }
+
+    window.cargarResumenIA = function() {
+      var box = document.getElementById('resumenIaText');
+      if (!box) return;
+      var causa = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      if (!causa) { box.innerHTML = '⚠️ No hay causa seleccionada.'; return; }
+      fetch('/?action=resumen-ia&causa=' + encodeURIComponent(causa))
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res.ok && res.resumen) {
+            box.innerHTML = formatoIA(res.resumen);
+          } else {
+            box.innerHTML = '⚠️ ' + esc(res.error || 'No se pudo generar el resumen.');
+          }
+        })
+        .catch(function(err) {
+          box.innerHTML = '⚠️ Error de conexión: ' + esc(err.message);
+        });
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+      var box = document.getElementById('resumenIaText');
+      if (box && box.getAttribute('data-pendiente') === '1') window.cargarResumenIA();
+    });
 
     // BUSCAR POSIBLE REINICIO TRAS ABANDONO PROCESAL (busca por cedula y
     // compara el asunto de la caratula contra las causas nuevas encontradas)
@@ -1037,7 +1074,9 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             <span>🤖 Reporte Ejecutivo procesal de IA (OpenAI)</span>
             <button class="btn-copy" onclick="copiarResumenIA()">📋 Copiar Resumen</button>
           </div>
-          <div class="ai-box" id="resumenIaText">${resumenHTML}</div>
+          <div class="ai-box" id="resumenIaText" data-pendiente="${resumenPendiente ? '1' : '0'}">${
+            resumenPendiente ? "🤖 Generando el resumen ejecutivo con IA… esto tarda unos segundos." : resumenHTML
+          }</div>
         </div>
 
         <!-- LÍNEA DE TIEMPO PROCESAL -->
