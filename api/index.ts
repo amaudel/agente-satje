@@ -349,7 +349,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
           method: "POST",
           headers,
-          body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+          body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: false }),
           signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
         });
         if (!resBuscar.ok) return res.status(502).json({ ok: false, error: `No se pudo buscar causas por cedula (HTTP ${resBuscar.status}).` });
@@ -414,7 +414,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
             const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
               method: "POST",
               headers,
-              body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+              body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: false }),
           signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
             });
             if (!resBuscar.ok) {
@@ -492,11 +492,18 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json", "X-API-Key": apiKey };
 
       const tCedula = Date.now();
+      // incluirTodasLasPaginas: false hace DOS cosas aqui:
+      //  1. cambia la clave de cache del backend, esquivando la fila
+      //     envenenada que devuelve HTTP 500 (bug del VPS que arregla el
+      //     commit b28091b, todavia sin desplegar);
+      //  2. pasa de hasta 20 llamadas a SATJE en fila a solo 2.
+      // Contrapartida: solo trae la primera pagina por rol (hasta 10 causas
+      // de cada uno). Al desplegar A2 en el VPS se puede volver a true.
       try {
         const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
           method: "POST",
           headers,
-          body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: true }),
+          body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: false }),
           signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
         });
         if (!resBuscar.ok) {
