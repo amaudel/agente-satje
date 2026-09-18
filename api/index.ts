@@ -492,49 +492,82 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json", "X-API-Key": apiKey };
 
       const tCedula = Date.now();
-      // incluirTodasLasPaginas: false hace DOS cosas aqui:
-      //  1. cambia la clave de cache del backend, esquivando la fila
-      //     envenenada que devuelve HTTP 500 (bug del VPS que arregla el
-      //     commit b28091b, todavia sin desplegar);
-      //  2. pasa de hasta 20 llamadas a SATJE en fila a solo 2.
-      // Contrapartida: solo trae la primera pagina por rol (hasta 10 causas
-      // de cada uno). Al desplegar A2 en el VPS se puede volver a true.
-      try {
-        const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
-          method: "POST",
-          headers,
-          body: JSON.stringify({ cedula, roles: ["actor", "demandado"], incluirTodasLasPaginas: false }),
-          signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
-        });
-        if (!resBuscar.ok) {
-          const detalle = await resBuscar.text().catch(() => "");
-          console.error(
-            `[cedula] backend HTTP ${resBuscar.status} tras ${Date.now() - tCedula}ms: ${detalle.slice(0, 400)}`
-          );
-          return res.status(502).json({ ok: false, error: `No se pudo buscar procesos por cedula (HTTP ${resBuscar.status}).` });
+      // El backend impone un PRESUPUESTO DE TIEMPO UPSTREAM por peticion, y
+      // consultar los dos roles en la misma llamada (actor + demandado) lo
+      // agota: devolvia HTTP 504 SATJE_TIMEOUT a los ~19 s. Se parte en dos
+      // peticiones, una por rol, cada una con su propio presupuesto; van en
+      // PARALELO, asi que el total es el de la mas lenta y no la suma.
+      // incluirTodasLasPaginas: false mantiene 1 llamada a SATJE por rol
+      // (con true serian hasta 10 por rol y el presupuesto no daria).
+      const buscarPorRol = async (rol: string) => {
+        try {
+          const res = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ cedula, roles: [rol], incluirTodasLasPaginas: false }),
+            signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
+          });
+          if (!res.ok) {
+            const detalle = await res.text().catch(() => "");
+            console.error(
+              `[cedula] rol=${rol} HTTP ${res.status} tras ${Date.now() - tCedula}ms: ${detalle.slice(0, 300)}`
+            );
+            return { ok: false, status: res.status, filas: [] as any[] };
+          }
+          const data: any = await res.json();
+          const filas = Array.isArray(data?.data) ? data.data : [];
+          console.log(`[cedula] rol=${rol} ok tras ${Date.now() - tCedula}ms causas=${filas.length}`);
+          return { ok: true, status: 200, filas };
+        } catch (errRol: any) {
+          const motivo = errRol?.message || String(errRol);
+          console.error(`[cedula] rol=${rol} excepcion tras ${Date.now() - tCedula}ms: ${motivo}`);
+          return { ok: false, status: 500, filas: [] as any[] };
         }
-        const buscarData: any = await resBuscar.json();
-        const causasRaw = Array.isArray(buscarData?.data) ? buscarData.data : [];
-        console.log(
-          `[cedula] ok tras ${Date.now() - tCedula}ms total=${buscarData?.total ?? causasRaw.length} mode=${buscarData?.mode ?? "?"}`
-        );
+      };
 
-        const procesos = causasRaw.map((c: any) => ({
-          idJuicio: c?.idJuicio || null,
-          numeroProceso: c?.numeroProceso || c?.idJuicio || null,
-          judicatura: c?.judicatura || null,
-          materia: c?.materia || null,
-          accion: c?.accion || null,
-          fechaIngreso: c?.fechaIngreso || null,
-          estadoActual: c?.estadoActual || null,
-          rolesEncontrados: Array.isArray(c?.rolesEncontrados) ? c.rolesEncontrados : [],
-        }));
+      const [resActor, resDemandado] = await Promise.all([buscarPorRol("actor"), buscarPorRol("demandado")]);
 
-        return res.status(200).json({ ok: true, cedula, total: procesos.length, procesos });
-      } catch (errCedula: any) {
-        console.error(`[cedula] excepcion tras ${Date.now() - tCedula}ms: ${errCedula?.message || String(errCedula)}`);
-        return res.status(500).json({ ok: false, error: errCedula?.message || String(errCedula) });
+      if (!resActor.ok && !resDemandado.ok) {
+        // Si fallan los dos se devuelve el error del primero, para no perder
+        // el diagnostico (504 = SATJE_TIMEOUT, 500 = error interno del VPS).
+        return res.status(502).json({
+          ok: false,
+          error: `No se pudo buscar procesos por cedula (HTTP ${resActor.status}).`,
+        });
       }
+
+      // Unir por idJuicio sin duplicar: una misma causa puede aparecer en las
+      // dos consultas (la persona es actora en una y demandada en la otra).
+      const porId = new Map<string, any>();
+      for (const fila of [...resActor.filas, ...resDemandado.filas]) {
+        const clave = String(fila?.idJuicio || fila?.numeroProceso || JSON.stringify(fila));
+        if (!porId.has(clave)) porId.set(clave, fila);
+      }
+      const causasRaw = [...porId.values()];
+
+      const procesos = causasRaw.map((c: any) => ({
+        idJuicio: c?.idJuicio || null,
+        numeroProceso: c?.numeroProceso || c?.idJuicio || null,
+        judicatura: c?.judicatura || null,
+        materia: c?.materia || null,
+        accion: c?.accion || null,
+        fechaIngreso: c?.fechaIngreso || null,
+        estadoActual: c?.estadoActual || null,
+        rolesEncontrados: Array.isArray(c?.rolesEncontrados) ? c.rolesEncontrados : [],
+      }));
+
+      return res.status(200).json({
+        ok: true,
+        cedula,
+        total: procesos.length,
+        // Aviso honesto: si un rol no respondio, la lista puede estar
+        // incompleta y el usuario tiene que saberlo, no verla como completa.
+        aviso:
+          resActor.ok && resDemandado.ok
+            ? null
+            : "Una de las dos busquedas (actor/demandado) no respondio, asi que la lista puede estar incompleta. Reintenta en unos minutos.",
+        procesos,
+      });
     }
 
     // 2e. RESUMEN EJECUTIVO CON IA (2e). Se pide por separado para no

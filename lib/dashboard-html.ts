@@ -408,6 +408,9 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           '<div class="batch-header">' +
             '<div class="batch-title">🔎 PROCESOS DE LA CÉDULA ' + esc(res.cedula) + ' (' + procesos.length + ')</div>' +
           '</div>' +
+          (res.aviso
+            ? '<div style="padding:0.6rem 0.9rem; color:var(--warning); font-size:0.85rem; font-weight:600;">⚠️ ' + esc(res.aviso) + '</div>'
+            : '') +
           '<div class="table-container"><table class="batch-table" id="cedulaTable"><thead><tr>' +
             '<th>N° Proceso</th><th>Judicatura</th><th>Materia / Acción</th><th>Fecha Ingreso</th><th>Estado</th><th>Acción</th>' +
           '</tr></thead><tbody>';
