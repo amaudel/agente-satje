@@ -491,6 +491,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       if (!apiKey) return res.status(500).json({ ok: false, error: "SATJE_API_KEY no esta configurado en el servidor." });
       const headers: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json", "X-API-Key": apiKey };
 
+      const tCedula = Date.now();
       try {
         const resBuscar = await fetch(`${baseUrl}/api/v1/causas/buscar`, {
           method: "POST",
@@ -499,10 +500,17 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           signal: AbortSignal.timeout(TIMEOUT_BUSCAR_MS),
         });
         if (!resBuscar.ok) {
+          const detalle = await resBuscar.text().catch(() => "");
+          console.error(
+            `[cedula] backend HTTP ${resBuscar.status} tras ${Date.now() - tCedula}ms: ${detalle.slice(0, 400)}`
+          );
           return res.status(502).json({ ok: false, error: `No se pudo buscar procesos por cedula (HTTP ${resBuscar.status}).` });
         }
         const buscarData: any = await resBuscar.json();
         const causasRaw = Array.isArray(buscarData?.data) ? buscarData.data : [];
+        console.log(
+          `[cedula] ok tras ${Date.now() - tCedula}ms total=${buscarData?.total ?? causasRaw.length} mode=${buscarData?.mode ?? "?"}`
+        );
 
         const procesos = causasRaw.map((c: any) => ({
           idJuicio: c?.idJuicio || null,
@@ -517,6 +525,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
 
         return res.status(200).json({ ok: true, cedula, total: procesos.length, procesos });
       } catch (errCedula: any) {
+        console.error(`[cedula] excepcion tras ${Date.now() - tCedula}ms: ${errCedula?.message || String(errCedula)}`);
         return res.status(500).json({ ok: false, error: errCedula?.message || String(errCedula) });
       }
     }
