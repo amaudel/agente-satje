@@ -14,7 +14,11 @@ const PRESUPUESTO_POR_CAUSA_MS = 45000;
 const TIMEOUT_AGENT_MS = 30000;
 // El backend consulta SATJE en vivo (via conector Apify) y puede tardar
 // bastante mas que el endpoint agent/satje, que responde de cache.
-const TIMEOUT_ACTUACIONES_MS = 30000;
+// El backend consulta SATJE en vivo (via conector) y una consulta FRIA puede
+// tardar ~20 s (medido). Su peor caso, con sus 20 s de timeout y 2 reintentos
+// con 1 s de espera, ronda los 41 s. 45 s deja margen sin pasar del
+// maxDuration de 60 s de la funcion (el resto del render es ~1,5 s).
+const TIMEOUT_ACTUACIONES_MS = 45000;
 const MIN_TIMEOUT_MS = 2000;
 
 // A partir de aqui la consulta se considera lenta y se registra su duracion
