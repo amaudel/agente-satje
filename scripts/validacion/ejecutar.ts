@@ -91,8 +91,10 @@ function linea(valor: unknown, ancho: number): string {
 async function main() {
   const esperados: Esperado[] = readFileSync(entrada, "utf8")
     .split(/\r?\n/)
-    .filter((l) => l.trim())
-    .map((l) => JSON.parse(l));
+    .filter((l) => l.includes("{"))
+    // La terminal web agrega marcas de pegado (^[[200~ ... ~) al inicio y al fin
+    // del texto pegado: se toma solo lo que va de la primera "{" a la ultima "}".
+    .map((l) => JSON.parse(l.slice(l.indexOf("{"), l.lastIndexOf("}") + 1)));
 
   console.error(`Muestra: ${esperados.length} juicios | backend ${BASE} | concurrencia ${CONCURRENCIA}`);
   const hoy = new Date();
