@@ -352,7 +352,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             '<td>' + esc(f.unidadJudicialDeprecadaGarante || 'No disponible') + '</td>' +
             '<td>' + esc(f.fechaCalificacionDeprecatorioGar || 'No disponible') + '</td>' +
             '<td>' + esc(f.fechaDeEtapa || 'No disponible') + '</td>' +
-            '<td><a href="/?causa=' + encodeURIComponent(f.numeroProceso || '') + '" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>' +
+            '<td><a href="/?causa=' + encodeURIComponent(f.numeroProceso || '') + '" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>' +
           '</tr>';
         });
 
@@ -425,7 +425,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             '<td>' + esc(materiaAccion) + '</td>' +
             '<td>' + esc(fecha) + '</td>' +
             '<td>' + esc(p.estadoActual || 'N/D') + '</td>' +
-            '<td><a href="/?causa=' + encodeURIComponent(numero) + '" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>' +
+            '<td><a href="/?causa=' + encodeURIComponent(numero) + '" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>' +
           '</tr>';
         });
 
@@ -693,6 +693,12 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     .chip-label { font-size: 0.8rem; color: var(--text-muted); font-weight: 600; }
     .chip-btn { background: rgba(15, 23, 42, 0.8); color: var(--accent); border: 1px solid var(--border); padding: 0.35rem 0.8rem; border-radius: 0.5rem; font-size: 0.82rem; font-weight: 600; cursor: pointer; text-decoration: none; transition: all 0.2s; }
     .chip-btn:hover { background: var(--accent); color: #0f172a; }
+    .btn-detalle { display: inline-flex; align-items: center; justify-content: center; gap: 0.4rem; white-space: nowrap; padding: 0.5rem 1rem; border-radius: 0.55rem; font-size: 0.82rem; font-weight: 700; color: #0f172a; background: var(--accent-gradient); text-decoration: none; box-shadow: 0 2px 8px rgba(56, 189, 248, 0.25); transition: transform 0.15s, box-shadow 0.15s; }
+    .btn-detalle:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(56, 189, 248, 0.45); }
+    .btn-detalle:active { transform: translateY(0); }
+    .btn-detalle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn-detalle span { transition: transform 0.15s; }
+    .btn-detalle:hover span { transform: translateX(3px); }
 
     .batch-card { background: var(--card-bg); backdrop-filter: blur(12px); padding: 2rem; border-radius: 1.2rem; border: 1px solid var(--border); margin-bottom: 2rem; }
     .batch-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
@@ -1182,7 +1188,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
                     <td><span class="kpi-tag ${estadoBadgeClass[item.estadoCicloVidaMedida] || 'muted'}">${estadoTextos[item.estadoCicloVidaMedida] || '⚪ Sin Medida'}</span></td>
                     <td style="font-weight:700; color:var(--accent);">${escapeHtml(item.fechaInscripcionMedida || 'No confirmada')}</td>
                     <td><span class="kpi-tag ${item.alertaAbandonoObjeto.badgeClass}">${escapeHtml(item.alertaAbandono)}</span></td>
-                    <td><a href="/?causa=${escapeHtml(item.causa)}" class="chip-btn chip-link" style="font-size:0.75rem;">Ver Detalle ➔</a></td>
+                    <td><a href="/?causa=${escapeHtml(item.causa)}" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>
                   </tr>
                 `).join('')}
               </tbody>

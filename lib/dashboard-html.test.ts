@@ -55,3 +55,15 @@ test("incluye el aviso de espera lenta y el script embebido sigue siendo valido"
   assert.ok(scripts.length > 0);
   for (const m of scripts) assert.doesNotThrow(() => new Function(m[1]));
 });
+
+test("los botones Ver detalle usan el estilo propio y mantienen chip-link para la navegacion SPA", () => {
+  const html = generarDashboardHTML({ causa: "01333-2021-04213" });
+  assert.ok(html.includes(".btn-detalle {"));
+  assert.ok(html.includes("white-space: nowrap"));
+  assert.ok(!html.includes("Ver Detalle ➔"));
+  const contar = (s: string) => s.split('class="btn-detalle chip-link"').length - 1;
+  assert.equal(contar(html), 2); // cedula y lote supervisor (se dibujan por JS)
+  const conLote = generarDashboardHTML({ causa: "x" }, true, [{ causa: "01333-2021-04213", etapaProcesalGeneral: "A", etapaProcesalEspecifica: "B", poseeSentencia: false, estadoCicloVidaMedida: "X", fechaInscripcionMedida: null, alertaAbandono: "ok", alertaAbandonoObjeto: { badgeClass: "success" } }]);
+  assert.equal(contar(conLote), 3); // + la tabla de lote
+  for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(m[1]));
+});
