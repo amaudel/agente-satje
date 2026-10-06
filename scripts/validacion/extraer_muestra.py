@@ -6,7 +6,10 @@ comparar: numero de juicio y lo que la oficial anoto. NO incluye nombres,
 cedulas ni numeros de cuenta.
 
 Uso:
-    python extraer_muestra.py <bitacora.xlsx> <salida.jsonl> [n=100] [semilla=7]
+    python extraer_muestra.py <bitacora.xlsx> <salida.jsonl> [n=100] [semilla=7] [compacto] [excluir.jsonl,otro.jsonl]
+
+El 6to argumento excluye los juicios ya usados en otras muestras (para armar una
+muestra de prueba distinta a la que sirvio para disenar las reglas).
 
 La salida contiene datos de la cartera: guardala FUERA de git (la carpeta
 datos-privados/ ya esta ignorada).
@@ -74,6 +77,16 @@ def main():
             reg[nombre] = texto(f[pos - 1]) if pos - 1 < len(f) else ""
         reg["juicio"] = juicio
         candidatos.append(reg)
+
+    if len(sys.argv) > 6 and sys.argv[6]:
+        usados = set()
+        for ruta_ex in sys.argv[6].split(","):
+            with open(ruta_ex, encoding="utf-8") as fh:
+                for linea in fh:
+                    m = PATRON_JUICIO.search(linea)
+                    if m:
+                        usados.add(m.group(0))
+        candidatos = [c for c in candidatos if c["juicio"] not in usados]
 
     rnd = random.Random(semilla)
     por_etapa = defaultdict(list)
