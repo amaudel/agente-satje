@@ -164,6 +164,33 @@ describe("detectorCicloVidaMedidaCautelar", () => {
     assert.equal(r.estadoCicloVida, "INSCRIPCION_NO_CONFIRMADA");
   });
 
+  test("la palabra cantón no convierte la medida en automotor", () => {
+    const r = detectorCicloVidaMedidaCautelar([
+      actuacion({ actividad: "Se dispone el embargo de los bienes del demandado, domiciliado en el cantón Cuenca.", fecha: "2025-01-10" }),
+    ]);
+    assert.equal(r.medidaDetectada, true);
+    assert.notEqual(r.tipoMedida, "EMBARGO / PROHIBICIÓN AUTOMOTOR");
+  });
+
+  test("un vehiculo o la ANT si indican medida automotor", () => {
+    const a = detectorCicloVidaMedidaCautelar([
+      actuacion({ actividad: "Se ordena el embargo del vehículo placa ABC-1234.", fecha: "2025-01-10" }),
+    ]);
+    assert.equal(a.tipoMedida, "EMBARGO / PROHIBICIÓN AUTOMOTOR");
+    const b = detectorCicloVidaMedidaCautelar([
+      actuacion({ actividad: "Ofíciese a la ANT para el embargo del rodado.", fecha: "2025-01-10" }),
+    ]);
+    assert.equal(b.tipoMedida, "EMBARGO / PROHIBICIÓN AUTOMOTOR");
+  });
+
+  test("que la parte demandante sea una cooperativa no implica retencion de cuentas", () => {
+    const r = detectorCicloVidaMedidaCautelar([
+      actuacion({ actividad: "La Cooperativa de Ahorro y Crédito solicita el embargo de bienes.", fecha: "2025-01-10" }),
+    ]);
+    assert.equal(r.medidaDetectada, true);
+    assert.notEqual(r.tipoMedida, "RETENCIÓN DE CUENTAS BANCARIAS");
+  });
+
   test("orden judicial de embargo marca estado ORDENADA", () => {
     const r = detectorCicloVidaMedidaCautelar([
       actuacion({ actividad: "El juez ordena el embargo del bien inmueble.", fecha: "2025-01-10" }),

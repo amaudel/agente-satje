@@ -54,6 +54,42 @@ export interface ResultadoCaso {
   // Resumen por incidente: sirve para descubrir como se reconoce la unidad
   // deprecada y la fecha de calificacion del deprecatorio.
   incidentes: ResumenIncidente[];
+  // Las ultimas actuaciones (la mas reciente primero), con su tipo y con las
+  // palabras clave que aparecen en el texto. NO se guarda el texto libre, que
+  // puede traer nombres de las partes.
+  ultimas: UltimaActuacion[];
+}
+
+export interface UltimaActuacion {
+  fecha: string | null;
+  tipo: string;
+  claves: string[];
+}
+
+// Vocabulario fijo para estudiar que senales marcan cada etapa procesal.
+export const PALABRAS_CLAVE = [
+  "archivo", "abandono", "desistimiento", "pago total", "sentencia", "ejecutoria", "apelacion",
+  "mediacion", "audiencia", "citacion", "citese", "deprecatorio", "remate", "embargo", "liquidacion",
+  "perito", "avaluo", "mandamiento", "insolvencia", "concurso", "inscripcion", "prohibicion",
+  "oficio", "razon", "calificacion", "sorteo", "excepciones", "contestacion",
+];
+
+function sinAcentos(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+export function resumirUltimas(actuaciones: any[], cuantas = 6): UltimaActuacion[] {
+  const ordenadas = [...actuaciones].sort((a, b) =>
+    String(b?.fecha ?? b?.fechaProvidencia ?? "").localeCompare(String(a?.fecha ?? a?.fechaProvidencia ?? ""))
+  );
+  return ordenadas.slice(0, cuantas).map((a) => {
+    const texto = sinAcentos(`${a?.tipo ?? ""} ${a?.actividad ?? a?.nombreActuacion ?? ""}`);
+    return {
+      fecha: soloFecha(a?.fecha ?? a?.fechaProvidencia),
+      tipo: String(a?.tipo ?? "").slice(0, 70),
+      claves: PALABRAS_CLAVE.filter((p) => texto.includes(p)),
+    };
+  });
 }
 
 function soloFecha(valor: unknown): string | null {
@@ -91,6 +127,7 @@ export function evaluarCaso(esperado: Esperado, data: any, hoy: Date): Resultado
       calculado: null,
       comparaciones: {},
       incidentes,
+      ultimas: [],
     };
   }
 
@@ -123,5 +160,6 @@ export function evaluarCaso(esperado: Esperado, data: any, hoy: Date): Resultado
       controlAbandono: compararControlAbandono(esperado.controlAbandono, calculado.fechaUltimaActuacion, hoy),
     },
     incidentes,
+    ultimas: resumirUltimas(actuaciones),
   };
 }

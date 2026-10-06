@@ -17,13 +17,18 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { sinSeparadoresCausa } from "../../lib/legal-analysis.js";
 import { evaluarCaso, type Esperado, type ResultadoCaso } from "../../lib/validacion-caso.js";
-import { resumirComparaciones, type Comparacion } from "../../lib/validacion.js";
+import {
+  resumirComparaciones,
+  categoriaMedidaManual,
+  categoriaMedidaHerramienta,
+  type Comparacion,
+} from "../../lib/validacion.js";
 
 const BASE = (process.env.SATJE_API_BASE_URL || "http://127.0.0.1:8010").replace(/\/$/, "");
 const API_KEY = process.env.SATJE_API_KEY || "";
 const CONCURRENCIA = Number(process.env.CONCURRENCIA || 2);
 const TIMEOUT_MS = Number(process.env.TIMEOUT_MS || 90000);
-const MAX_DISCREPANCIAS = Number(process.env.MAX_DISCREPANCIAS || 12);
+const MAX_DISCREPANCIAS = Number(process.env.MAX_DISCREPANCIAS || 5);
 
 const [entrada, carpeta = "datos-privados/resultados"] = process.argv.slice(2);
 if (!entrada) {
@@ -110,7 +115,7 @@ async function main() {
     if (!intento.data) {
       return {
         juicio: esp.juicio, ok: false, motivo: intento.error, parcial: false, totalActuaciones: 0,
-        calculado: null, comparaciones: {}, incidentes: [], ms: intento.ms, error: intento.error,
+        calculado: null, comparaciones: {}, incidentes: [], ultimas: [], ms: intento.ms, error: intento.error,
       };
     }
     return { ...evaluarCaso(esp, intento.data, hoy), ms: intento.ms };
@@ -133,12 +138,81 @@ async function main() {
   p("ACIERTO POR COLUMNA (sobre los casos donde habia dato para comparar)");
   p(`${linea("Columna", 34)} ${linea("comparables", 12)} ${linea("aciertos", 9)} ${linea("%", 5)} ${linea("discrepan", 10)} ${linea("sin dato herr.", 15)} sin dato manual`);
 
-  for (const [campo, etiqueta] of Object.entries(ETIQUETAS)) {
-    const comps: Comparacion[] = exitosos.map((r) => r.comparaciones[campo]).filter(Boolean);
-    const r = resumirComparaciones(comps);
-    p(
-      `${linea(etiqueta, 34)} ${linea(r.comparables, 12)} ${linea(r.aciertos, 9)} ${linea(r.porcentajeAcierto === null ? "-" : r.porcentajeAcierto + "%", 5)} ${linea(r.discrepancias, 10)} ${linea(r.sinDatoHerramienta, 15)} ${r.sinDatoManual}`
-    );
+  const tablaAcierto = (casos: typeof exitosos) => {
+    for (const [campo, etiqueta] of Object.entries(ETIQUETAS)) {
+      const comps: Comparacion[] = casos.map((r) => r.comparaciones[campo]).filter(Boolean);
+      const r = resumirComparaciones(comps);
+      p(
+        `${linea(etiqueta, 34)} ${linea(r.comparables, 12)} ${linea(r.aciertos, 9)} ${linea(r.porcentajeAcierto === null ? "-" : r.porcentajeAcierto + "%", 5)} ${linea(r.discrepancias, 10)} ${linea(r.sinDatoHerramienta, 15)} ${r.sinDatoManual}`
+      );
+    }
+  };
+  tablaAcierto(exitosos);
+
+  const completos = exitosos.filter((r) => !r.parcial);
+  p();
+  p(`MISMO CALCULO SOLO CON RESPUESTA COMPLETA DE SATJE (${completos.length} juicios, sin los ${exitosos.length - completos.length} parciales)`);
+  tablaAcierto(completos);
+
+  // --- Matrices: que puso la oficial (filas) contra que puso la herramienta (columnas) ---
+  const porJuicio = new Map(esperados.map((e) => [e.juicio, e]));
+  const codigo = (e: unknown) => {
+    const m = String(e ?? "").match(/^\s*(\d{1,2})/);
+    return m ? m[1].padStart(2, "0") : "--";
+  };
+  const matriz = (titulo: string, pares: [string, string][]) => {
+    const filas = [...new Set(pares.map((x) => x[0]))].sort();
+    const cols = [...new Set(pares.map((x) => x[1]))].sort();
+    p();
+    p(titulo);
+    p(`   ${"anotado".padEnd(14)} ${cols.map((c) => c.slice(0, 7).padStart(8)).join("")}   total`);
+    for (const f of filas) {
+      const sub = pares.filter((x) => x[0] === f);
+      p(`   ${f.slice(0, 14).padEnd(14)} ${cols.map((c) => String(sub.filter((x) => x[1] === c).length || ".").padStart(8)).join("")} ${String(sub.length).padStart(7)}`);
+    }
+  };
+  p();
+  p("Codigos de etapa: 01 revision legal, 02 sorteo, 03 calificacion, 04 citacion, 05 mediacion, 06 audiencia, 07 sentencia, 08 ejecutoria, 09 apelacion, 10 ejecucion, 12 archivado, 13 concurso, 14 insolvencia, 15 devuelto a cobranzas");
+  matriz(
+    "MATRIZ ETAPA GENERAL (filas: anotado por la oficial | columnas: herramienta)",
+    exitosos
+      .filter((r) => ["acierto", "discrepa"].includes(r.comparaciones.etapaGeneral?.resultado))
+      .map((r): [string, string] => [codigo(r.comparaciones.etapaGeneral.manual), codigo(r.comparaciones.etapaGeneral.herramienta)])
+  );
+  matriz(
+    "MATRIZ MEDIDA CAUTELAR (ninguna / inmueble / mueble / retencion / otra)",
+    exitosos
+      .filter((r) => r.calculado && porJuicio.get(r.juicio) && categoriaMedidaManual(porJuicio.get(r.juicio)!.medida) !== "desconocida")
+      .map((r): [string, string] => [
+        categoriaMedidaManual(porJuicio.get(r.juicio)!.medida),
+        categoriaMedidaHerramienta(r.calculado!.medidaDetectada, r.calculado!.tipoMedida),
+      ])
+  );
+  matriz(
+    "MATRIZ CONTROL DE ABANDONO",
+    exitosos
+      .filter((r) => ["acierto", "discrepa"].includes(r.comparaciones.controlAbandono?.resultado))
+      .map((r): [string, string] => [String(r.comparaciones.controlAbandono.manual).toUpperCase(), String(r.comparaciones.controlAbandono.herramienta)])
+  );
+
+  // --- Que senales hay en la ultima actuacion de cada etapa anotada por la oficial ---
+  p();
+  p("ULTIMA ACTUACION SEGUN LA ETAPA QUE ANOTO LA OFICIAL (tipos mas frecuentes | palabras clave de las 2 ultimas)");
+  const porEtapa = new Map<string, typeof exitosos>();
+  for (const r of exitosos) {
+    const e = porJuicio.get(r.juicio);
+    if (!e || codigo(e.etapaGeneral) === "--") continue;
+    const k = codigo(e.etapaGeneral);
+    porEtapa.set(k, [...(porEtapa.get(k) ?? []), r]);
+  }
+  const top = (valores: string[], n: number) => {
+    const c = new Map<string, number>();
+    for (const v of valores) c.set(v, (c.get(v) ?? 0) + 1);
+    return [...c.entries()].sort((a, b) => b[1] - a[1]).slice(0, n).map(([v, k]) => `${k}x ${v}`);
+  };
+  for (const [k, casos] of [...porEtapa.entries()].sort()) {
+    p(`   ${k} (n=${casos.length}) tipos: ${top(casos.map((r) => (r.ultimas[0]?.tipo || "?").slice(0, 36)), 3).join(" ; ")}`);
+    p(`        claves: ${top(casos.flatMap((r) => r.ultimas.slice(0, 2).flatMap((u) => u.claves)), 6).join(", ")}`);
   }
 
   p();

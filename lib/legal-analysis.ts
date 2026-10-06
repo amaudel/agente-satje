@@ -432,10 +432,10 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
       if (textoStr.includes("propiedad") || textoStr.includes("predio") || textoStr.includes("terreno") || textoStr.includes("inmueble")) {
         me.tipoMedida = "PROHIBICIÓN DE ENAJENAR / EMBARGO (INMUEBLE)";
         me.institucionEjecutora = "REGISTRO DE LA PROPIEDAD";
-      } else if (textoStr.includes("vehiculo") || textoStr.includes("vehículo") || textoStr.includes("chasis") || textoStr.includes("placa") || textoStr.includes("ant")) {
+      } else if (textoStr.includes("vehiculo") || textoStr.includes("vehículo") || textoStr.includes("chasis") || textoStr.includes("placa") || /\bant\b|agencia nacional de transito|agencia nacional de tránsito/.test(textoStr)) {
         me.tipoMedida = "EMBARGO / PROHIBICIÓN AUTOMOTOR";
         me.institucionEjecutora = "AGENCIA NACIONAL DE TRÁNSITO / REGISTRO MERCANTIL";
-      } else if (textoStr.includes("banco") || textoStr.includes("cooperativa") || textoStr.includes("cuentas") || textoStr.includes("fondos")) {
+      } else if (/\bbancos?\b|cuentas (bancarias|de ahorro|corrientes)|retenci(o|ó)n de (fondos|valores)|\bfondos\b/.test(textoStr)) {
         me.tipoMedida = "RETENCIÓN DE CUENTAS BANCARIAS";
         me.institucionEjecutora = "SUPERINTENDENCIA DE BANCOS / INSTITUCIONES FINANCIERAS";
       }
