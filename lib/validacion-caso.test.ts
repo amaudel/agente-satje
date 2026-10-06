@@ -80,7 +80,7 @@ test("sin actuaciones no inventa datos: ok=false con motivo", () => {
 
 test("guarda las ultimas actuaciones (tipo y palabras clave, sin el texto) para estudiar la etapa", () => {
   const r = evaluarCaso(esperado, respuestaBackend, new Date("2026-10-06T12:00:00Z"));
-  assert.ok(r.ultimas.length > 0 && r.ultimas.length <= 6);
+  assert.ok(r.ultimas.length > 0 && r.ultimas.length <= 8);
   // la mas reciente primero
   assert.equal(r.ultimas[0].fecha, "2026-01-10");
   assert.equal(r.ultimas[0].tipo, "PROVIDENCIA");

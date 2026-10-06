@@ -45,7 +45,9 @@ const ETIQUETAS: Record<string, string> = {
   etapa: "Etapa procesal (especifica)",
   medida: "Medida cautelar",
   fechaInscripcion: "Fecha inscripcion de la medida",
-  controlAbandono: "Control de abandono (5 meses)",
+  // "Control de abandono", "Prioridad" y "ACT" no se miden: en la bitacora son
+  // formulas de Excel (>150 dias desde Fecha de Etapa, etc.), no datos de SATJE.
+  // Saldran solas cuando la herramienta calcule bien la etapa y su fecha.
 };
 
 interface Intento {
@@ -188,12 +190,26 @@ async function main() {
         categoriaMedidaHerramienta(r.calculado!.medidaDetectada, r.calculado!.tipoMedida),
       ])
   );
-  matriz(
-    "MATRIZ CONTROL DE ABANDONO",
-    exitosos
-      .filter((r) => ["acierto", "discrepa"].includes(r.comparaciones.controlAbandono?.resultado))
-      .map((r): [string, string] => [String(r.comparaciones.controlAbandono.manual).toUpperCase(), String(r.comparaciones.controlAbandono.herramienta)])
-  );
+
+  // Archivo compacto para estudiar las reglas de etapa fuera del servidor. Una
+  // fila por juicio, SIN el numero de juicio (solo su posicion "ref" en la hoja
+  // de la oficial), con las ultimas actuaciones como fecha|tipo|palabras clave.
+  const fechaCorta = (v: unknown) => (String(v ?? "").match(/^\d{4}-\d{2}-\d{2}/) || [""])[0];
+  const digest = resultados.map((r) => {
+    const e = porJuicio.get(r.juicio);
+    const acts = r.ultimas.map((u) => `${u.fecha ?? "?"}|${u.tipo.slice(0, 44)}|${u.claves.join(",")}`).join(" ;; ");
+    return [
+      e?.ref ?? "?",
+      codigo(e?.etapaGeneral),
+      String(e?.etapa ?? "").slice(0, 5),
+      fechaCorta(e?.fechaEtapa),
+      codigo(r.calculado?.etapaGeneral),
+      r.parcial ? 1 : 0,
+      r.ok ? 1 : 0,
+      acts,
+    ].join("\t");
+  });
+  writeFileSync(`${carpeta}/digest.tsv`, "ref\tetapa_anotada\tsubetapa\tfecha_etapa\tetapa_herramienta\tparcial\tok\tultimas_actuaciones\n" + digest.join("\n") + "\n");
 
   // --- Que senales hay en la ultima actuacion de cada etapa anotada por la oficial ---
   p();

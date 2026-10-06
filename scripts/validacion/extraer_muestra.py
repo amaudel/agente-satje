@@ -113,9 +113,16 @@ def main():
         lista.remove(rnd.choice(sin_inscripcion or del_estrato))
     rnd.shuffle(lista)
 
+    # Con el 5to argumento "compacto" se escriben solo los campos que necesita el
+    # informe de etapas y sin espacios, para poder pegar la muestra en una terminal.
+    compacto = len(sys.argv) > 5 and sys.argv[5] == "compacto"
+    campos = ["ref", "juicio", "etapaGeneral", "etapa", "fechaEtapa", "medida", "fechaInscripcion"]
     with open(salida, "w", encoding="utf-8") as fh:
         for c in lista:
-            fh.write(json.dumps(c, ensure_ascii=False) + "\n")
+            if compacto:
+                fh.write(json.dumps({k: c[k] for k in campos}, ensure_ascii=False, separators=(",", ":")) + "\n")
+            else:
+                fh.write(json.dumps(c, ensure_ascii=False) + "\n")
 
     print(f"candidatos con juicio valido: {total} | muestra escrita: {len(lista)} -> {salida}")
     print("por etapa general:")

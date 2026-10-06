@@ -15,6 +15,8 @@ import {
 
 // Lo que la oficial anoto a mano para un juicio (sin datos personales).
 export interface Esperado {
+  // Posicion de la fila en la hoja de la oficial (no identifica a nadie).
+  ref?: number;
   juicio: string;
   etapaGeneral?: string;
   etapa?: string;
@@ -78,7 +80,7 @@ function sinAcentos(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 }
 
-export function resumirUltimas(actuaciones: any[], cuantas = 6): UltimaActuacion[] {
+export function resumirUltimas(actuaciones: any[], cuantas = 8): UltimaActuacion[] {
   const ordenadas = [...actuaciones].sort((a, b) =>
     String(b?.fecha ?? b?.fechaProvidencia ?? "").localeCompare(String(a?.fecha ?? a?.fechaProvidencia ?? ""))
   );
