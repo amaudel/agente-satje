@@ -16,3 +16,6 @@ graphify-out/
 extracted_api/.venv/
 extracted_api/**/__pycache__/
 extracted_api/.pytest_cache/
+
+# datos reales de la cartera: nunca a git (el repo es publico)
+datos-privados/
