@@ -88,3 +88,23 @@ test("guarda las ultimas actuaciones (tipo y palabras clave, sin el texto) para 
   // el texto libre de la actuacion (puede traer nombres) no se guarda
   assert.ok(!JSON.stringify(r.ultimas).includes("Registrador de la Propiedad"));
 });
+
+test("calcula la fecha de la etapa desde el ultimo hito y la compara con la anotada", () => {
+  const caso = {
+    success: true,
+    incidentes: [
+      {
+        incidente: 1,
+        nombreJudicatura: "UNIDAD JUDICIAL CIVIL",
+        actuaciones: [
+          { codigo: 3, fecha: "2026-05-01T10:00:00.000+00:00", tipo: "ATENDER PETICION (RAZON DE NOTIFICACION)" },
+          { codigo: 2, fecha: "2026-04-08T10:00:00.000+00:00", tipo: "ABANDONO POR FALTA DE IMPULSO PROCESAL ART. 245 (AUTO)" },
+        ],
+      },
+    ],
+  };
+  const r = evaluarCaso({ juicio: "01333-2024-00001", etapaGeneral: "12. ARCHIVADO", fechaEtapa: "2026-04-08" }, caso, new Date("2026-10-06T12:00:00Z"));
+  assert.equal(r.calculado?.etapaGeneral, "12. ARCHIVADO");
+  assert.equal(r.calculado?.fechaEtapa, "2026-04-08");
+  assert.equal(r.comparaciones.fechaEtapa.resultado, "acierto");
+});
