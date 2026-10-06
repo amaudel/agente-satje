@@ -292,85 +292,167 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         });
     }
 
+    // El lote se envia en grupos pequenos: una sola llamada tiene 50 s de
+    // presupuesto y con consultas frias a SATJE no alcanzan para decenas de
+    // personas (las filas restantes saldrian "No procesado"). Cada grupo es una
+    // llamada independiente, asi un fallo solo afecta a sus filas.
+    var TAM_GRUPO_SUPERVISOR = 5;
+    var MAX_PERSONAS_SUPERVISOR = 100;
+    var supervisor = { personas: [], filas: [], cancelado: false, enCurso: false };
+
+    function htmlFilaSupervisor(persona, f) {
+      var base = '<td>' + esc(persona.cedula) + '</td><td>' + esc(persona.nombres) + '</td><td>' + esc(persona.apellidos) + '</td><td>' + esc(persona.numeroOperacion) + '</td>';
+      // 9 columnas de datos + la de advertencia + la de accion. Los motivos van en
+      // Advertencia (no en una celda combinada) para que salgan en el CSV/Excel.
+      var celdasVacias = new Array(10).join('<td></td>');
+      function sinDatos(mensaje, color) {
+        return '<tr>' + base + celdasVacias + '<td style="color:' + color + ';">' + esc(mensaje) + '</td><td></td></tr>';
+      }
+      if (!f) return sinDatos('⏳ Pendiente', 'var(--text-muted)');
+
+      var aviso = f.busquedaIncompleta ? '⚠️ Búsqueda incompleta: ' + (f.advertenciaBusqueda || 'revisar manualmente') : '';
+      if (f.error) return sinDatos('⚠️ ' + f.error, 'var(--danger)');
+      if (f.sinCausaVigente) {
+        var texto = 'Sin juicio vigente (' + (f.totalCausasEncontradas || 0) + ' causa(s) encontradas, todas cerradas/abandonadas o ninguna causa)';
+        return sinDatos(aviso ? texto + '. ' + aviso : texto, aviso ? 'var(--warning)' : 'var(--text-muted)');
+      }
+      return '<tr>' + base +
+        '<td><strong>' + esc(f.numeroProceso || '') + '</strong></td>' +
+        '<td>' + esc(f.etapaProcesalGeneral || 'No disponible') + '</td>' +
+        '<td style="font-size:0.85rem;">' + esc(f.etapaProcesalEspecifica || 'No disponible') + '</td>' +
+        '<td>' + esc(f.fechaInscripcionMedidaCautelar || 'No confirmada') + '</td>' +
+        '<td>' + esc(f.unidadJudicialDeprecadaDeudor || 'No disponible') + '</td>' +
+        '<td>' + esc(f.fechaCalificacionDeprecatorioDeu || 'No disponible') + '</td>' +
+        '<td>' + esc(f.unidadJudicialDeprecadaGarante || 'No disponible') + '</td>' +
+        '<td>' + esc(f.fechaCalificacionDeprecatorioGar || 'No disponible') + '</td>' +
+        '<td>' + esc(f.fechaDeEtapa || 'No disponible') + '</td>' +
+        '<td style="color:var(--warning);">' + esc(aviso) + '</td>' +
+        '<td><a href="/?causa=' + encodeURIComponent(f.numeroProceso || '') + '" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>' +
+        '</tr>';
+    }
+
+    function repintarTablaSupervisor() {
+      var html = '';
+      supervisor.personas.forEach(function(p, i) { html += htmlFilaSupervisor(p, supervisor.filas[i]); });
+      document.getElementById('supervisorTbody').innerHTML = html;
+    }
+
+    function actualizarProgresoSupervisor() {
+      var total = supervisor.personas.length;
+      var hechas = 0;
+      var conError = 0;
+      supervisor.personas.forEach(function(p, i) {
+        var f = supervisor.filas[i];
+        if (f) { hechas++; if (f.error) conError++; }
+      });
+      var pct = total ? Math.round(hechas * 100 / total) : 0;
+      document.getElementById('supervisorBarra').style.width = pct + '%';
+      var texto = 'Procesadas ' + hechas + ' de ' + total + ' (' + pct + '%)';
+      if (conError) texto += ' · ' + conError + ' con error';
+      if (supervisor.enCurso) texto += supervisor.cancelado ? ' · cancelando, termina el grupo en curso...' : ' · en curso';
+      else if (supervisor.cancelado) texto += ' · cancelado';
+      document.getElementById('supervisorProgresoTexto').innerText = texto;
+
+      var pendientes = total - hechas;
+      document.getElementById('btnSupervisorCancelar').style.display = supervisor.enCurso ? 'inline-block' : 'none';
+      document.getElementById('btnSupervisorReintentar').style.display = (!supervisor.enCurso && (conError + pendientes) > 0) ? 'inline-block' : 'none';
+      document.getElementById('btnSubmitSupervisor').disabled = supervisor.enCurso;
+    }
+
+    function procesarIndicesSupervisor(indices) {
+      var grupos = [];
+      for (var i = 0; i < indices.length; i += TAM_GRUPO_SUPERVISOR) {
+        grupos.push(indices.slice(i, i + TAM_GRUPO_SUPERVISOR));
+      }
+      supervisor.enCurso = true;
+      supervisor.cancelado = false;
+      actualizarProgresoSupervisor();
+
+      function marcarError(idxs, motivo) {
+        idxs.forEach(function(idx) {
+          var p = supervisor.personas[idx];
+          supervisor.filas[idx] = { cedula: p.cedula, nombres: p.nombres, apellidos: p.apellidos, numeroOperacion: p.numeroOperacion, error: 'No procesado: ' + motivo };
+        });
+      }
+
+      function siguiente(n) {
+        if (supervisor.cancelado || n >= grupos.length) {
+          supervisor.enCurso = false;
+          actualizarProgresoSupervisor();
+          return Promise.resolve();
+        }
+        var idxs = grupos[n];
+        return fetch('/?action=lote-supervisor', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'lote-supervisor', personas: idxs.map(function(idx) { return supervisor.personas[idx]; }) })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (res && res.ok && Array.isArray(res.filas)) {
+            idxs.forEach(function(idx, k) {
+              if (res.filas[k]) supervisor.filas[idx] = res.filas[k];
+              else marcarError([idx], 'el servidor no devolvio esta fila');
+            });
+          } else {
+            marcarError(idxs, (res && res.error) || 'respuesta inesperada del servidor');
+          }
+        })
+        .catch(function() {
+          marcarError(idxs, 'el servidor no respondio a tiempo o se perdio la conexion');
+        })
+        .then(function() {
+          repintarTablaSupervisor();
+          actualizarProgresoSupervisor();
+          return siguiente(n + 1);
+        });
+      }
+      return siguiente(0);
+    }
+
     window.ejecutarLoteSupervisor = function() {
       var input = document.getElementById('inputSupervisorLote');
-      var box = document.getElementById('supervisorResultadosBox');
-      if (!input || !box) return;
+      var mensaje = document.getElementById('supervisorMensaje');
+      var caja = document.getElementById('supervisorResultadosBox');
+      if (!input || !mensaje || !caja || supervisor.enCurso) return;
 
       var personas = parsearFilasSupervisor(input.value);
       if (personas.length === 0) {
-        box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--warning);">Pega al menos una fila con cédula.</div>';
+        mensaje.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--warning);">Pega al menos una fila con cédula.</div>';
+        return;
+      }
+      if (personas.length > MAX_PERSONAS_SUPERVISOR) {
+        mensaje.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--warning);">Pegaste ' + personas.length + ' filas; el máximo por consulta es ' + MAX_PERSONAS_SUPERVISOR + '. Divide la lista en partes.</div>';
         return;
       }
 
-      box.innerHTML = '<div class="card" style="padding:1.5rem; text-align:center; color:var(--text-muted);">⏳ Consultando ' + personas.length + ' cédula(s) en SATJE, esto puede tardar...</div>';
+      mensaje.innerHTML = '';
+      supervisor.personas = personas;
+      supervisor.filas = new Array(personas.length);
+      caja.style.display = 'block';
+      document.getElementById('supervisorTitulo').innerText = '🗂️ RESULTADO LOTE SUPERVISOR (' + personas.length + ' persona(s))';
+      repintarTablaSupervisor();
 
-      fetch('/?action=lote-supervisor', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'lote-supervisor', personas: personas })
-      })
-      .then(function(r) { return r.json(); })
-      .then(function(res) {
-        if (!res.ok) {
-          box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ ' + (esc(res.error) || 'No se pudo completar la consulta.') + '</div>';
-          return;
-        }
-        var filas = res.filas || [];
-        var html = '<div class="batch-card">' +
-          '<div class="batch-header">' +
-            '<div class="batch-title">🗂️ RESULTADO LOTE SUPERVISOR (' + filas.length + ' persona(s))</div>' +
-            '<button class="btn-copy" onclick="exportarCSVTabla(\\'supervisorTable\\', \\'Lote_Supervisor_SATJE.csv\\')">📥 Exportar a CSV / Excel</button>' +
-          '</div>' +
-          '<div class="table-container"><table class="batch-table" id="supervisorTable"><thead><tr>' +
-            '<th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>N° Operación</th>' +
-            '<th>N° Proceso Vigente</th><th>Etapa Procesal General</th><th>Etapa Procesal</th>' +
-            '<th>F. Inscripción Medida Cautelar</th><th>Unidad Judicial Deprecada Deudor</th>' +
-            '<th>Fecha Calificación Deprecatorio DEU</th><th>Unidad Judicial Deprecada Garante</th>' +
-            '<th>Fecha Calificación Deprecatorio GAR</th><th>Fecha de Etapa</th><th>Advertencia</th><th>Acción</th>' +
-          '</tr></thead><tbody>';
+      var todos = personas.map(function(p, i) { return i; });
+      procesarIndicesSupervisor(todos);
+    };
 
-        // Las filas sin resultado llevan su motivo en la columna Advertencia
-        // (y no en una celda combinada) para que salga en el CSV/Excel.
-        var celdasVacias = new Array(10).join('<td></td>');
-        function filaSinDatos(f, mensaje, color) {
-          return '<tr><td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
-            celdasVacias + '<td style="color:' + color + ';">' + esc(mensaje) + '</td><td></td></tr>';
-        }
+    window.cancelarLoteSupervisor = function() {
+      supervisor.cancelado = true;
+      actualizarProgresoSupervisor();
+    };
 
-        filas.forEach(function(f) {
-          var aviso = f.busquedaIncompleta ? '⚠️ Búsqueda incompleta: ' + (f.advertenciaBusqueda || 'revisar manualmente') : '';
-          if (f.error) {
-            html += filaSinDatos(f, '⚠️ ' + f.error, 'var(--danger)');
-            return;
-          }
-          if (f.sinCausaVigente) {
-            var base = 'Sin juicio vigente (' + (f.totalCausasEncontradas || 0) + ' causa(s) encontradas, todas cerradas/abandonadas o ninguna causa)';
-            html += filaSinDatos(f, aviso ? base + '. ' + aviso : base, aviso ? 'var(--warning)' : 'var(--text-muted)');
-            return;
-          }
-          html += '<tr>' +
-            '<td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
-            '<td><strong>' + esc(f.numeroProceso || '') + '</strong></td>' +
-            '<td>' + esc(f.etapaProcesalGeneral || 'No disponible') + '</td>' +
-            '<td style="font-size:0.85rem;">' + esc(f.etapaProcesalEspecifica || 'No disponible') + '</td>' +
-            '<td>' + esc(f.fechaInscripcionMedidaCautelar || 'No confirmada') + '</td>' +
-            '<td>' + esc(f.unidadJudicialDeprecadaDeudor || 'No disponible') + '</td>' +
-            '<td>' + esc(f.fechaCalificacionDeprecatorioDeu || 'No disponible') + '</td>' +
-            '<td>' + esc(f.unidadJudicialDeprecadaGarante || 'No disponible') + '</td>' +
-            '<td>' + esc(f.fechaCalificacionDeprecatorioGar || 'No disponible') + '</td>' +
-            '<td>' + esc(f.fechaDeEtapa || 'No disponible') + '</td>' +
-            '<td style="color:var(--warning);">' + esc(aviso) + '</td>' +
-            '<td><a href="/?causa=' + encodeURIComponent(f.numeroProceso || '') + '" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>' +
-          '</tr>';
-        });
-
-        html += '</tbody></table></div></div>';
-        box.innerHTML = html;
-      })
-      .catch(function(err) {
-        box.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ Error de conexión: ' + esc(err.message) + '</div>';
+    window.reintentarLoteSupervisor = function() {
+      if (supervisor.enCurso) return;
+      var indices = [];
+      supervisor.personas.forEach(function(p, i) {
+        var f = supervisor.filas[i];
+        if (!f || f.error) indices.push(i);
       });
+      if (indices.length === 0) return;
+      indices.forEach(function(i) { supervisor.filas[i] = undefined; });
+      repintarTablaSupervisor();
+      procesarIndicesSupervisor(indices);
     };
 
     // CONSULTA DE PROCESOS POR CEDULA: lista todos los procesos donde la
@@ -1222,7 +1304,38 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <p style="font-size:0.82rem; color:var(--text-muted); margin-top:0.5rem;">Determina el <strong>último juicio vigente</strong> por persona (excluye causas ya sentenciadas o declaradas en abandono).</p>
         </div>
 
-        <div id="supervisorResultadosBox"></div>
+        <div id="supervisorMensaje"></div>
+
+        <div id="supervisorResultadosBox" style="display:none;">
+          <div class="batch-card">
+            <div class="batch-header">
+              <div class="batch-title" id="supervisorTitulo"></div>
+              <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                <button type="button" class="btn-copy" id="btnSupervisorCancelar" style="display:none;" onclick="window.cancelarLoteSupervisor()">⏹ Cancelar</button>
+                <button type="button" class="btn-copy" id="btnSupervisorReintentar" style="display:none;" onclick="window.reintentarLoteSupervisor()">🔁 Reintentar pendientes y con error</button>
+                <button type="button" class="btn-copy" onclick="exportarCSVTabla('supervisorTable', 'Lote_Supervisor_SATJE.csv')">📥 Exportar a CSV / Excel</button>
+              </div>
+            </div>
+            <div style="height:8px; background:rgba(148,163,184,0.2); border-radius:999px; overflow:hidden; margin:0.9rem 0 0.4rem;">
+              <div id="supervisorBarra" style="height:100%; width:0%; background:var(--accent-gradient); transition:width 0.3s;"></div>
+            </div>
+            <div id="supervisorProgresoTexto" style="font-size:0.85rem; color:var(--text-muted); margin-bottom:0.8rem;"></div>
+            <div class="table-container">
+              <table class="batch-table" id="supervisorTable">
+                <thead>
+                  <tr>
+                    <th>Cédula</th><th>Nombres</th><th>Apellidos</th><th>N° Operación</th>
+                    <th>N° Proceso Vigente</th><th>Etapa Procesal General</th><th>Etapa Procesal</th>
+                    <th>F. Inscripción Medida Cautelar</th><th>Unidad Judicial Deprecada Deudor</th>
+                    <th>Fecha Calificación Deprecatorio DEU</th><th>Unidad Judicial Deprecada Garante</th>
+                    <th>Fecha Calificación Deprecatorio GAR</th><th>Fecha de Etapa</th><th>Advertencia</th><th>Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="supervisorTbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="footer">
