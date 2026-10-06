@@ -55,4 +55,9 @@ Configurar en `.env.local` (Vercel) / `.dev.vars` (Cloudflare Worker) — nunca 
 - `SATJE_AUTH_PASSWORD` — contraseña de acceso al dashboard.
 - `UPSTASH_VECTOR_REST_URL`, `UPSTASH_VECTOR_REST_TOKEN` — motor RAG de precedentes (opcional).
 
-Ver `extracted_api/.env.example` para las variables del backend Python.
+Ver `extracted_api/.env.example` para las variables del backend Python. También se usa `SATJE_SESSION_SECRET` (opcional) como clave de firma de la sesión.
+
+## Documentación
+
+- [`docs/ARQUITECTURA_AGENTE_SATJE.md`](docs/ARQUITECTURA_AGENTE_SATJE.md) — arquitectura vigente, seguridad, topes operativos y limitaciones conocidas.
+- [`docs/historico/`](docs/historico/) — auditoría y changelog del 18-ago-2026 (registro histórico, no reflejan el estado actual).
