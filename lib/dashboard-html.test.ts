@@ -46,3 +46,12 @@ test("no rompe el caso normal sin payload", () => {
   assert.ok(html.includes('value="01333-2025-08870"'));
   assert.ok(html.includes('|| "01333-2025-08870";'));
 });
+
+test("incluye el aviso de espera lenta y el script embebido sigue siendo valido", () => {
+  const html = generarDashboardHTML({ causa: "01333-2021-04213" });
+  assert.ok(html.includes('id="loadingAviso"'));
+  assert.ok(html.includes("SATJE está tardando más de lo normal"));
+  const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
+  assert.ok(scripts.length > 0);
+  for (const m of scripts) assert.doesNotThrow(() => new Function(m[1]));
+});

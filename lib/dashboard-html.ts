@@ -515,6 +515,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
 
     // MOTOR DE NAVEGACIÓN CLIENTE-SIDE (SPA / FETCH SIN REFRESH DE PÁGINA)
     var animTimer = null;
+    var avisoTimer = null;
     window.activarModalCarga = function(mensajeText) {
       var card = document.getElementById('loadingOverlay');
       var step = document.getElementById('loadingStep');
@@ -547,6 +548,30 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           }, 150);
         }
       }, 1400);
+
+      // Aviso por tiempo transcurrido: la primera consulta de una causa
+      // depende de SATJE y puede tardar 15-30 s; sin aviso parece congelada.
+      var aviso = document.getElementById('loadingAviso');
+      if (avisoTimer) clearInterval(avisoTimer);
+      if (aviso) aviso.style.display = 'none';
+      var inicioEspera = Date.now();
+      avisoTimer = setInterval(function() {
+        var overlay = document.getElementById('loadingOverlay');
+        var cajaAviso = document.getElementById('loadingAviso');
+        if (!overlay || !cajaAviso || window.getComputedStyle(overlay).display === 'none') {
+          clearInterval(avisoTimer);
+          return;
+        }
+        var seg = Math.floor((Date.now() - inicioEspera) / 1000);
+        if (seg >= 30) {
+          cajaAviso.innerText = '⏳ Sigue esperando (' + seg + ' s). SATJE está respondiendo muy lento. Si falla, vuelve a intentar: lo que ya se obtuvo queda guardado y la segunda vez suele ser más rápida.';
+        } else if (seg >= 8) {
+          cajaAviso.innerText = '⏳ SATJE está tardando más de lo normal (' + seg + ' s). La primera consulta de una causa puede demorar hasta 45 s. No cierres la página.';
+        } else {
+          return;
+        }
+        cajaAviso.style.display = 'block';
+      }, 1000);
     };
 
     window.ejecutarConsultaClientSide = function(urlDestino, msgInicial) {
@@ -650,6 +675,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     .robot-icon { font-size: 3.8rem; margin-bottom: 1rem; animation: pulseBounce 1.2s infinite alternate; }
     @keyframes pulseBounce { 0% { transform: translateY(0) scale(1); } 100% { transform: translateY(-14px) scale(1.1); } }
     .loading-title { font-size: 1.4rem; font-weight: 800; color: #fff; margin-bottom: 0.6rem; }
+    .loading-aviso { margin-top: 1.2rem; padding: 0.8rem 1rem; border-radius: 0.6rem; background: rgba(251, 191, 36, 0.12); border: 1px solid rgba(251, 191, 36, 0.4); color: #fbbf24; font-size: 0.92rem; font-weight: 600; line-height: 1.4; }
     .loading-step { font-size: 1.05rem; color: var(--accent); font-weight: 700; margin-bottom: 1.4rem; min-height: 1.6rem; transition: opacity 0.2s; }
     .progress-bar { width: 100%; height: 10px; background: #060911; border-radius: 6px; overflow: hidden; position: relative; border: 1px solid var(--border); }
     .progress-fill { height: 100%; width: 45%; background: var(--accent-gradient); border-radius: 6px; position: absolute; animation: progressAnim 1.6s infinite ease-in-out; }
@@ -806,6 +832,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         <div class="progress-bar">
           <div class="progress-fill"></div>
         </div>
+        <div id="loadingAviso" class="loading-aviso" style="display:none;"></div>
       </div>
 
       <!-- PESTAÑA 1: CONSULTA INDIVIDUAL -->
