@@ -510,12 +510,24 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           var numero = p.numeroProceso || p.idJuicio || '';
           var materiaAccion = [p.materia, p.accion].filter(Boolean).join(' — ') || 'N/D';
           var fecha = (p.fechaIngreso || '').split('T')[0] || 'N/D';
+          // SATJE no entrega el nombre de la judicatura en la lista de busqueda
+          // (nombreJudicatura viene null). Sin inventar nombres, se muestra su
+          // codigo: los 5 primeros caracteres del numero de proceso.
+          var codigoJudicatura = String(numero).replace(/[^0-9A-Za-z]/g, '').slice(0, 5);
+          var judicaturaHtml = p.judicatura
+            ? esc(p.judicatura)
+            : (codigoJudicatura
+              ? '<span title="SATJE no entrega el nombre de la judicatura en esta lista; este es su código. El nombre aparece en el detalle de la causa.">Cód. ' + esc(codigoJudicatura) + '</span>'
+              : 'N/D');
+          var estadoHtml = p.estadoActual
+            ? '<span title="Código de estado que entrega SATJE en la lista (sin descripción). Para el estado procesal real abre el detalle.">' + esc(p.estadoActual) + '</span>'
+            : 'N/D';
           html += '<tr>' +
             '<td><strong>' + esc(numero) + '</strong></td>' +
-            '<td>' + esc(p.judicatura || 'N/D') + '</td>' +
+            '<td>' + judicaturaHtml + '</td>' +
             '<td>' + esc(materiaAccion) + '</td>' +
             '<td>' + esc(fecha) + '</td>' +
-            '<td>' + esc(p.estadoActual || 'N/D') + '</td>' +
+            '<td>' + estadoHtml + '</td>' +
             '<td><a href="/?causa=' + encodeURIComponent(numero) + '" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>' +
           '</tr>';
         });

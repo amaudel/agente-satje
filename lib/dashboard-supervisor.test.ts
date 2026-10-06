@@ -196,3 +196,30 @@ test("una fila con busqueda incompleta muestra la advertencia en su celda", asyn
   assert.ok(tabla.includes("fallo la busqueda como demandado"));
   assert.ok(tabla.includes("01204-2022-01413G"));
 });
+
+// --- Tabla de procesos por cedula: columna Judicatura ---
+
+test("sin nombre de judicatura se muestra su codigo (primeros 5 caracteres del proceso)", async () => {
+  const { sandbox, el } = crearEntorno(async () => ({
+    ok: true,
+    json: async () => ({
+      ok: true,
+      cedula: "0105249684",
+      procesos: [
+        { numeroProceso: "01U03202373295", judicatura: null, accion: "CONTRAVENCION", fechaIngreso: "2023-08-23T10:00:00", estadoActual: "A" },
+        { numeroProceso: "01204202201413G", judicatura: null, accion: "TUTELA", fechaIngreso: "2022-11-28T10:00:00", estadoActual: "A" },
+        { numeroProceso: "01333202104213", judicatura: "UNIDAD JUDICIAL CIVIL CUENCA", accion: "COBRO", fechaIngreso: "2021-06-09T10:00:00", estadoActual: "A" },
+      ],
+    }),
+  }));
+  el("inputSearchCedula").value = "0105249684";
+  sandbox.window.buscarProcesosPorCedula();
+  for (let i = 0; i < 100 && !el("cedulaResultados").innerHTML.includes("cedulaTable"); i++) {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  const tabla = el("cedulaResultados").innerHTML;
+  assert.ok(tabla.includes("Cód. 01U03"), "proceso con letra: codigo 01U03");
+  assert.ok(tabla.includes("Cód. 01204"), "proceso con letra al final: codigo 01204");
+  assert.ok(tabla.includes("UNIDAD JUDICIAL CIVIL CUENCA"), "si SATJE da el nombre, se usa");
+  assert.equal((tabla.match(/Cód\./g) || []).length, 2, "solo las dos sin nombre muestran codigo");
+});
