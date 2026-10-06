@@ -19,6 +19,27 @@ test("un abandono declarado manda: lo administrativo posterior no lo cambia", ()
   assert.equal(r?.fechaEtapa, "2026-04-08");
 });
 
+test("el archivo es terminal: devoluciones de deprecatorio posteriores no lo reabren", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2025-04-25", "NOTIFICACION (AUTO DE SUSTANCIACION)"),
+    act("2025-04-15", "RAZON (RAZON)"),
+    act("2025-02-07", "DEVOLUCIÓN DEPRECATORIO POR CUMPLIMIENTO DE DILIGENCIA (AUTO)"),
+    act("2025-01-10", "RAZON ENVIO A CITACIONES (NOMBRE CITADO)"),
+    act("2024-09-10", "ABANDONO POR FALTA DE IMPULSO PROCESAL ART. 245 (AUTO)"),
+    act("2023-06-01", "CALIFICACION DE SOLICITUD Y/O DEMANDA (AUTO)"),
+  ]);
+  assert.equal(r?.etapaGeneral, "12. ARCHIVADO");
+  assert.equal(r?.fechaEtapa, "2024-09-10");
+});
+
+test("un mandamiento de ejecucion posterior al archivo si prevalece (se reactivo)", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2026-02-01", "MANDAMIENTO DE EJECUCION (AUTO INTERLOCUTORIO)"),
+    act("2025-05-01", "ARCHIVO POR NO COMPLETAR DEMANDA (AUTO)"),
+  ]);
+  assert.equal(r?.etapaGeneral, "10. EJECUCION");
+});
+
 test("distingue las subetapas de archivo por el tipo de actuacion", () => {
   const sub = (tipo: string) => clasificarEtapaPorHitos([act("2025-01-01", tipo)])!.etapaEspecifica.slice(0, 4);
   assert.equal(sub("ARCHIVO POR NO COMPLETAR DEMANDA (AUTO INTERLOCUTORIO)"), "12.2");

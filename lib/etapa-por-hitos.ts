@@ -152,6 +152,17 @@ export function clasificarEtapaPorHitos(actuaciones: any[]): ClasificacionConFec
   }
   if (hitos.length === 0) return null;
 
+  // El archivo es terminal: despues de archivar siguen llegando devoluciones de
+  // deprecatorio, razones de citacion, etc. de comisiones anteriores, y eso no
+  // reabre el juicio. Solo lo reabre una ejecucion, apelacion o sentencia.
+  const iArchivo = hitos.findIndex((h) => h.clave === "archivo");
+  if (iArchivo > 0) {
+    const eco: Clave[] = ["citacion", "calificacion", "sorteo", "audiencia", "mediacion"];
+    const filtrados = hitos.filter((h, i) => i >= iArchivo || !eco.includes(h.clave));
+    hitos.length = 0;
+    hitos.push(...filtrados);
+  }
+
   // Hito vigente: el mas reciente; en el mismo dia, el de mayor prioridad.
   const fechaTop = hitos[0].fecha;
   const delDia = hitos.filter((h) => h.fecha === fechaTop);
