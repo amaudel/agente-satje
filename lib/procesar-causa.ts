@@ -1,5 +1,6 @@
 import {
   normalizarNumeroCausa,
+  sinSeparadoresCausa,
   extraerTodasLasActuaciones,
   clasificarEtapaProcesal,
   detectorSentenciaLegal,
@@ -32,7 +33,7 @@ export async function procesarCausaIndividual(
   presupuestoMs: number = PRESUPUESTO_POR_CAUSA_MS
 ) {
   const causaFormateada = normalizarNumeroCausa(causaInput);
-  const causaSinGuiones = causaInput.replace(/\D/g, "");
+  const causaSinGuiones = sinSeparadoresCausa(causaInput);
   const headers: Record<string, string> = {
     "Accept": "application/json",
     "Content-Type": "application/json",

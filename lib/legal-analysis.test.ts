@@ -2,6 +2,7 @@ import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 import {
   normalizarNumeroCausa,
+  sinSeparadoresCausa,
   extraerTodasLasActuaciones,
   detectorSentenciaLegal,
   clasificarEtapaProcesal,
@@ -10,6 +11,7 @@ import {
   extraerAsuntoDeCaratula,
   filtrarCandidatosReinicio,
   seleccionarJuicioVigente,
+  evaluarCompletitudBusqueda,
 } from "./legal-analysis.js";
 
 function actuacion(overrides: Record<string, any> = {}) {
@@ -33,6 +35,22 @@ describe("normalizarNumeroCausa", () => {
 
   test("no reformatea numeros fuera del rango 13-16 digitos", () => {
     assert.equal(normalizarNumeroCausa("12345"), "12345");
+  });
+
+  test("no altera numeros de proceso con letras (ej. 01U03202373295)", () => {
+    assert.equal(normalizarNumeroCausa("01U03202373295"), "01U03202373295");
+    assert.equal(normalizarNumeroCausa("01204202201413G"), "01204202201413G");
+  });
+});
+
+describe("sinSeparadoresCausa", () => {
+  test("quita guiones y espacios de un numero formateado", () => {
+    assert.equal(sinSeparadoresCausa(" 01333-2025-08870 "), "01333202508870");
+  });
+
+  test("conserva las letras del identificador", () => {
+    assert.equal(sinSeparadoresCausa("01U03202373295"), "01U03202373295");
+    assert.equal(sinSeparadoresCausa("01204-2022-01413G"), "01204202201413G");
   });
 });
 
@@ -508,5 +526,43 @@ describe("seleccionarJuicioVigente", () => {
       causaEstado({ idJuicio: "con-fecha", fechaIngreso: "2022-01-01" }),
     ]);
     assert.equal(resultado?.idJuicio, "con-fecha");
+  });
+});
+
+describe("evaluarCompletitudBusqueda", () => {
+  const fila = (roles: string[]) => ({ idJuicio: "x", rolesEncontrados: roles });
+
+  test("una busqueda sin fallos y con pocas causas es completa", () => {
+    const r = evaluarCompletitudBusqueda({ partial: false, partialErrors: [], data: [fila(["actor"]), fila(["demandado"])] });
+    assert.equal(r.incompleta, false);
+    assert.deepEqual(r.motivos, []);
+  });
+
+  test("partial=true marca incompleta y nombra el rol que fallo", () => {
+    const r = evaluarCompletitudBusqueda({
+      partial: true,
+      partialErrors: [{ role: "demandado", code: "SATJE_TIMEOUT", message: "tiempo agotado" }],
+      data: [fila(["actor"])],
+    });
+    assert.equal(r.incompleta, true);
+    assert.match(r.motivos.join(" "), /demandado/);
+  });
+
+  test("un rol con una pagina llena (10) puede estar truncado", () => {
+    const data = Array.from({ length: 10 }, () => fila(["actor"]));
+    const r = evaluarCompletitudBusqueda({ partial: false, partialErrors: [], data });
+    assert.equal(r.incompleta, true);
+    assert.match(r.motivos.join(" "), /actor/);
+    assert.match(r.motivos.join(" "), /10/);
+  });
+
+  test("diez causas repartidas entre roles no se consideran truncadas", () => {
+    const data = [...Array.from({ length: 5 }, () => fila(["actor"])), ...Array.from({ length: 5 }, () => fila(["demandado"]))];
+    assert.equal(evaluarCompletitudBusqueda({ data }).incompleta, false);
+  });
+
+  test("tolera respuestas sin los campos opcionales", () => {
+    assert.equal(evaluarCompletitudBusqueda({}).incompleta, false);
+    assert.equal(evaluarCompletitudBusqueda(null as any).incompleta, false);
   });
 });

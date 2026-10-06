@@ -67,3 +67,13 @@ test("los botones Ver detalle usan el estilo propio y mantienen chip-link para l
   assert.equal(contar(conLote), 3); // + la tabla de lote
   for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(m[1]));
 });
+
+test("el lote supervisor muestra la columna Advertencia y las filas sin datos llevan el motivo en ella", () => {
+  const html = generarDashboardHTML({ causa: "01333-2021-04213" });
+  assert.ok(html.includes("<th>Advertencia</th>"));
+  assert.ok(html.includes("Búsqueda incompleta"));
+  assert.ok(html.includes("function filaSinDatos("));
+  // 4 celdas base + 9 vacias + advertencia + accion = 15, igual que el encabezado
+  assert.ok(html.includes("new Array(10).join('<td></td>')"));
+  for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(m[1]));
+});

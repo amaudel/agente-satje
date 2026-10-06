@@ -5,6 +5,8 @@ import {
   extraerAsuntoDeCaratula,
   filtrarCandidatosReinicio,
   seleccionarJuicioVigente,
+  evaluarCompletitudBusqueda,
+  sinSeparadoresCausa,
   type CausaConEstado,
 } from "../lib/legal-analysis.js";
 import { procesarCausaIndividual } from "../lib/procesar-causa.js";
@@ -327,7 +329,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           return res.status(404).json({ ok: false, error: "No se encontro la actuacion CARATULA DE JUICIO en el expediente para determinar el asunto." });
         }
 
-        const idJuicioActual = String(resultado.causa).replace(/\D/g, "");
+        const idJuicioActual = sinSeparadoresCausa(String(resultado.causa));
 
         const resDocs = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(idJuicioActual)}/actuaciones/${encodeURIComponent(caratula.codigo)}/documentos`, { headers, signal: AbortSignal.timeout(TIMEOUT_DOCUMENTOS_MS) });
         if (!resDocs.ok) return res.status(502).json({ ok: false, error: `No se pudo obtener el documento de la caratula (HTTP ${resDocs.status}).` });
@@ -423,8 +425,16 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
             const buscarData: any = await resBuscar.json();
             const causasEncontradas: any[] = Array.isArray(buscarData?.data) ? buscarData.data : [];
 
+            const completitud = evaluarCompletitudBusqueda(buscarData);
+
             if (causasEncontradas.length === 0) {
-              return { ...filaBase, totalCausasEncontradas: 0, sinCausaVigente: true };
+              return {
+                ...filaBase,
+                totalCausasEncontradas: 0,
+                sinCausaVigente: true,
+                busquedaIncompleta: completitud.incompleta,
+                advertenciaBusqueda: completitud.motivos.join("; "),
+              };
             }
 
             const detalles = await mapConcurrente(
@@ -432,6 +442,19 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
               CONCURRENCIA_DETALLE_CAUSAS,
               (c: any) => procesarCausaIndividual(c.numeroProceso || c.idJuicio, baseUrl, apiKey, presupuesto.restante())
             );
+
+            // Una causa cuyo detalle no se pudo consultar queda con estado
+            // desconocido (el calculo la trata como "normal"): no puede
+            // presentarse como vigente sin avisar.
+            const sinEvaluar = detalles.filter((d: any) => d?.backendError).length;
+            if (sinEvaluar > 0) {
+              completitud.incompleta = true;
+              completitud.motivos.push(`no se pudo consultar el estado de ${sinEvaluar} causa(s)`);
+            }
+            const avisoBusqueda = {
+              busquedaIncompleta: completitud.incompleta,
+              advertenciaBusqueda: completitud.motivos.join("; "),
+            };
 
             const causasConEstado: CausaConEstado[] = causasEncontradas.map((c: any, idx: number) => ({
               idJuicio: c.idJuicio,
@@ -443,7 +466,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
 
             const vigente = seleccionarJuicioVigente(causasConEstado);
             if (!vigente) {
-              return { ...filaBase, totalCausasEncontradas: causasEncontradas.length, sinCausaVigente: true };
+              return { ...filaBase, totalCausasEncontradas: causasEncontradas.length, sinCausaVigente: true, ...avisoBusqueda };
             }
 
             const idxVigente = causasConEstado.findIndex((c) => c.idJuicio === vigente.idJuicio);
@@ -453,6 +476,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
               ...filaBase,
               totalCausasEncontradas: causasEncontradas.length,
               sinCausaVigente: false,
+              ...avisoBusqueda,
               numeroProceso: vigente.numeroProceso,
               etapaProcesalGeneral: detalleVigente?.etapaProcesalGeneral,
               etapaProcesalEspecifica: detalleVigente?.etapaProcesalEspecifica,

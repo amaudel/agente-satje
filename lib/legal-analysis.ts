@@ -43,12 +43,22 @@ export const CATEGORIAS_INDICADORES = {
   ],
 };
 
+// Quita solo los separadores (guiones, espacios, puntos) de un numero de
+// proceso. NO descarta letras: SATJE tiene identificadores alfanumericos como
+// 01U03202373295 o 01204202201413G, y quitarles la letra produce un numero
+// distinto que no existe (404 y esperas de 20 s).
+export function sinSeparadoresCausa(raw: string): string {
+  return raw.replace(/[^0-9A-Za-z]/g, "");
+}
+
 export function normalizarNumeroCausa(raw: string): string {
-  const soloNumeros = raw.replace(/\D/g, "");
-  if (soloNumeros.length >= 13 && soloNumeros.length <= 16) {
-    const parte1 = soloNumeros.slice(0, 5);
-    const parte2 = soloNumeros.slice(5, 9);
-    const parte3 = soloNumeros.slice(9);
+  const compacto = sinSeparadoresCausa(raw);
+  // Solo se inventan guiones para numeros puramente numericos. Si trae letras
+  // se devuelve tal cual: no hay un formato con guiones que sea seguro.
+  if (/^\d{13,16}$/.test(compacto)) {
+    const parte1 = compacto.slice(0, 5);
+    const parte2 = compacto.slice(5, 9);
+    const parte3 = compacto.slice(9);
     return `${parte1}-${parte2}-${parte3}`;
   }
   return raw.trim();
@@ -747,4 +757,49 @@ export function seleccionarJuicioVigente(causas: CausaConEstado[]): CausaConEsta
     const fechaActual = actual.fechaIngreso ? new Date(actual.fechaIngreso).getTime() : -Infinity;
     return fechaActual > fechaMejor ? actual : mejor;
   });
+}
+
+// El backend pagina de a 10 causas por rol. Una pagina llena puede significar
+// que hay mas causas que no se pidieron.
+export const TAMANO_PAGINA_BUSQUEDA = 10;
+
+export interface RespuestaBusquedaCedula {
+  partial?: boolean;
+  partialErrors?: { role?: string; code?: string; message?: string }[];
+  data?: { rolesEncontrados?: string[] }[];
+}
+
+// Antes de afirmar cual es "el ultimo juicio vigente" hay que saber si la lista
+// de causas esta completa: si falto un rol o una pagina, la causa elegida puede
+// no ser la correcta y eso no debe presentarse como un resultado firme.
+export function evaluarCompletitudBusqueda(
+  respuesta: RespuestaBusquedaCedula | null | undefined,
+  tamanoPagina: number = TAMANO_PAGINA_BUSQUEDA
+): { incompleta: boolean; motivos: string[] } {
+  const motivos: string[] = [];
+  if (!respuesta) return { incompleta: false, motivos };
+
+  if (respuesta.partial) {
+    const errores = respuesta.partialErrors ?? [];
+    if (errores.length === 0) {
+      motivos.push("SATJE no respondio por completo");
+    }
+    for (const e of errores) {
+      motivos.push(`fallo la busqueda como ${e.role ?? "una de las partes"}${e.code ? ` (${e.code})` : ""}`);
+    }
+  }
+
+  const porRol = new Map<string, number>();
+  for (const causa of respuesta.data ?? []) {
+    for (const rol of causa.rolesEncontrados ?? []) {
+      porRol.set(rol, (porRol.get(rol) ?? 0) + 1);
+    }
+  }
+  for (const [rol, total] of porRol) {
+    if (total >= tamanoPagina) {
+      motivos.push(`como ${rol} hay ${total} causas o mas y puede haber otras sin traer`);
+    }
+  }
+
+  return { incompleta: motivos.length > 0, motivos };
 }

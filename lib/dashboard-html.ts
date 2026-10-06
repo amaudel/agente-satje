@@ -327,18 +327,26 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             '<th>N° Proceso Vigente</th><th>Etapa Procesal General</th><th>Etapa Procesal</th>' +
             '<th>F. Inscripción Medida Cautelar</th><th>Unidad Judicial Deprecada Deudor</th>' +
             '<th>Fecha Calificación Deprecatorio DEU</th><th>Unidad Judicial Deprecada Garante</th>' +
-            '<th>Fecha Calificación Deprecatorio GAR</th><th>Fecha de Etapa</th><th>Acción</th>' +
+            '<th>Fecha Calificación Deprecatorio GAR</th><th>Fecha de Etapa</th><th>Advertencia</th><th>Acción</th>' +
           '</tr></thead><tbody>';
 
+        // Las filas sin resultado llevan su motivo en la columna Advertencia
+        // (y no en una celda combinada) para que salga en el CSV/Excel.
+        var celdasVacias = new Array(10).join('<td></td>');
+        function filaSinDatos(f, mensaje, color) {
+          return '<tr><td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
+            celdasVacias + '<td style="color:' + color + ';">' + esc(mensaje) + '</td><td></td></tr>';
+        }
+
         filas.forEach(function(f) {
+          var aviso = f.busquedaIncompleta ? '⚠️ Búsqueda incompleta: ' + (f.advertenciaBusqueda || 'revisar manualmente') : '';
           if (f.error) {
-            html += '<tr><td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
-              '<td colspan="10" style="color:var(--danger);">⚠️ ' + esc(f.error) + '</td></tr>';
+            html += filaSinDatos(f, '⚠️ ' + f.error, 'var(--danger)');
             return;
           }
           if (f.sinCausaVigente) {
-            html += '<tr><td>' + esc(f.cedula) + '</td><td>' + esc(f.nombres) + '</td><td>' + esc(f.apellidos) + '</td><td>' + esc(f.numeroOperacion) + '</td>' +
-              '<td colspan="10" style="color:var(--text-muted);">Sin juicio vigente (' + (f.totalCausasEncontradas || 0) + ' causa(s) encontradas, todas cerradas/abandonadas o ninguna causa)</td></tr>';
+            var base = 'Sin juicio vigente (' + (f.totalCausasEncontradas || 0) + ' causa(s) encontradas, todas cerradas/abandonadas o ninguna causa)';
+            html += filaSinDatos(f, aviso ? base + '. ' + aviso : base, aviso ? 'var(--warning)' : 'var(--text-muted)');
             return;
           }
           html += '<tr>' +
@@ -352,6 +360,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             '<td>' + esc(f.unidadJudicialDeprecadaGarante || 'No disponible') + '</td>' +
             '<td>' + esc(f.fechaCalificacionDeprecatorioGar || 'No disponible') + '</td>' +
             '<td>' + esc(f.fechaDeEtapa || 'No disponible') + '</td>' +
+            '<td style="color:var(--warning);">' + esc(aviso) + '</td>' +
             '<td><a href="/?causa=' + encodeURIComponent(f.numeroProceso || '') + '" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>' +
           '</tr>';
         });
