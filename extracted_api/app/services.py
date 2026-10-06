@@ -319,7 +319,7 @@ class SatjeService:
             raise ApiError(ErrorCode.VALIDATION_ERROR, "buscarCausas", status_code=422)
 
         cache_key = (
-            f"v2:buscar:{self.client.mode}:{self.client.__class__.__name__}:{cedula}:"
+            f"v3:buscar:{self.client.mode}:{self.client.__class__.__name__}:{cedula}:"
             f"{','.join(sorted(requested_roles))}:{incluir_todas_las_paginas}:"
             f"{settings.satje_page_size}:{settings.satje_max_pages}"
         )
@@ -330,6 +330,8 @@ class SatjeService:
             return cached
 
         by_id: dict[str, tuple[Juicio, set[str]]] = {}
+        partial_errors: list[dict[str, Any]] = []
+        last_error: ApiError | None = None
         with operation_timer(
             requestId=request_id,
             endpoint="/api/v1/causas/buscar",
@@ -339,26 +341,46 @@ class SatjeService:
         ) as state:
             for role in requested_roles:
                 page = 1
-                while True:
-                    raw = await self.client.buscar_causas_por_cedula(
-                        cedula,
-                        role=role,
-                        page=page,
-                        size=settings.satje_page_size,
+                try:
+                    while True:
+                        raw = await self.client.buscar_causas_por_cedula(
+                            cedula,
+                            role=role,
+                            page=page,
+                            size=settings.satje_page_size,
+                        )
+                        rows = _extract_rows(raw)
+                        for row in rows:
+                            juicio = _normalize_juicio(row)
+                            if not juicio.id_juicio:
+                                continue
+                            existing = by_id.setdefault(juicio.id_juicio, (juicio, set()))
+                            existing[1].add(role)
+                        if not incluir_todas_las_paginas or len(rows) < settings.satje_page_size:
+                            break
+                        page += 1
+                        if page > settings.satje_max_pages:
+                            break
+                except ApiError as exc:
+                    # Un rol caido no debe tumbar la busqueda entera: se devuelve
+                    # lo que si se obtuvo y se marca el resultado como parcial.
+                    last_error = exc
+                    partial_errors.append(
+                        {
+                            "role": role,
+                            "code": exc.code.value,
+                            "message": exc.message or exc.code.value,
+                            "upstreamStatusCode": exc.status_code,
+                            "upstreamCode": None,
+                            "retryable": exc.retryable,
+                        }
                     )
-                    rows = _extract_rows(raw)
-                    for row in rows:
-                        juicio = _normalize_juicio(row)
-                        if not juicio.id_juicio:
-                            continue
-                        existing = by_id.setdefault(juicio.id_juicio, (juicio, set()))
-                        existing[1].add(role)
-                    if not incluir_todas_las_paginas or len(rows) < settings.satje_page_size:
-                        break
-                    page += 1
-                    if page > settings.satje_max_pages:
-                        break
             state["causas"] = len(by_id)
+
+        # Si fallaron TODOS los roles no hay nada que devolver: se propaga el
+        # error en vez de responder 200 con una lista vacia enganosa.
+        if last_error is not None and len(partial_errors) == len(requested_roles):
+            raise last_error
 
         data = [juicio_to_frontend(juicio, roles_found) for juicio, roles_found in by_id.values()]
         result = {
@@ -369,10 +391,15 @@ class SatjeService:
             "cedula": cedula,
             "total": len(data),
             "data": data,
+            "partial": bool(partial_errors),
+            "partialErrors": partial_errors,
             "requestId": request_id,
             "cache": {"hit": False, "ttlSeconds": settings.cache_ttl_seconds},
         }
-        set_cached(cache_key, {**result, "requestId": None})
+        # Un resultado parcial no se cachea: el siguiente intento debe poder
+        # recuperar el rol que fallo.
+        if not partial_errors:
+            set_cached(cache_key, {**result, "requestId": None})
         return result
 
     async def actuaciones_por_juicio(self, id_juicio: str, *, request_id: str | None = None) -> dict[str, Any]:

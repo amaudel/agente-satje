@@ -1128,3 +1128,68 @@ def test_logs_mask_identifiers_and_omit_large_payloads(caplog):
     assert "texto completo que no debe quedar en logs" not in message
     assert "texto HBA completo" not in message
     assert "<omitted:1>" in message
+
+
+class BuscarPorRolClient(DocumentClient):
+    """Falla el rol indicado con el error indicado; el otro devuelve una causa."""
+
+    mode = "fixture"
+
+    def __init__(self, fallan: dict[str, ApiError] | None = None):
+        self.fallan = fallan or {}
+
+    async def buscar_causas_por_cedula(self, cedula, *, role, page, size):
+        if role in self.fallan:
+            raise self.fallan[role]
+        return [{"idJuicio": f"J-{role}", "numeroProceso": f"N-{role}", "materia": "CIVIL"}]
+
+
+def test_buscar_cedula_sin_fallos_devuelve_partial_false_y_lista_vacia():
+    import anyio
+
+    result = anyio.run(SatjeService(BuscarPorRolClient()).buscar_causas_por_cedula, "BUSCA-OK-1")
+
+    assert result["partial"] is False
+    assert result["partialErrors"] == []
+    assert result["total"] == 2
+
+
+def test_buscar_cedula_con_un_rol_caido_devuelve_resultado_parcial():
+    import anyio
+
+    client = BuscarPorRolClient({"demandado": ApiError(ErrorCode.SATJE_TIMEOUT, "buscarCausas", status_code=504)})
+    result = anyio.run(SatjeService(client).buscar_causas_por_cedula, "BUSCA-PARCIAL-1")
+
+    assert result["success"] is True
+    assert result["partial"] is True
+    assert result["total"] == 1
+    error = result["partialErrors"][0]
+    assert error["role"] == "demandado"
+    assert error["code"] == "SATJE_TIMEOUT"
+    assert error["retryable"] is True
+    assert isinstance(error["message"], str) and error["message"]
+
+
+def test_buscar_cedula_parcial_no_se_guarda_en_cache():
+    import anyio
+
+    caido = BuscarPorRolClient({"actor": ApiError(ErrorCode.SATJE_TIMEOUT, "buscarCausas", status_code=504)})
+    anyio.run(SatjeService(caido).buscar_causas_por_cedula, "BUSCA-CACHE-1")
+    segundo = anyio.run(SatjeService(BuscarPorRolClient()).buscar_causas_por_cedula, "BUSCA-CACHE-1")
+
+    assert segundo["partial"] is False
+    assert segundo["total"] == 2
+
+
+def test_buscar_cedula_si_fallan_todos_los_roles_lanza_el_error():
+    import anyio
+    import pytest
+
+    client = BuscarPorRolClient(
+        {
+            "actor": ApiError(ErrorCode.SATJE_TIMEOUT, "buscarCausas", status_code=504),
+            "demandado": ApiError(ErrorCode.SATJE_TIMEOUT, "buscarCausas", status_code=504),
+        }
+    )
+    with pytest.raises(ApiError):
+        anyio.run(SatjeService(client).buscar_causas_por_cedula, "BUSCA-TODO-CAIDO-1")
