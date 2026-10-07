@@ -625,3 +625,38 @@ describe("abandono declarado detectado por el tipo de actuacion", () => {
     assert.notEqual(r.nivel, "abandonada");
   });
 });
+
+describe("fecha de inscripcion: la del escrito con el oficio del Registro, no la de la providencia que lo agrega", () => {
+  const f = (d: string) => `${d}T10:00:00.000+00:00`;
+  // Caso real revisado con la oficial (sin nombres): orden 20-nov-2024, oficio 5-dic,
+  // el oficio del Registro se presenta el 17-dic y el juez lo agrega al proceso el 7-ene-2025.
+  const caso = [
+    { codigo: 1, fecha: f("2024-11-20"), tipo: "CALIFICACION DE SOLICITUD Y/O DEMANDA (AUTO DE SUSTANCIACION)", actividad: "Se dispone la prohibición de enajenar del inmueble." },
+    { codigo: 2, fecha: f("2024-12-05"), tipo: "OFICIO (OFICIO)", actividad: "De mis consideraciones: sírvase inscribir la prohibición de enajenar. Registrador de la Propiedad." },
+    { codigo: 3, fecha: f("2024-12-17"), tipo: "OFICIO", actividad: "Escrito, FePresentacion" },
+    { codigo: 4, fecha: f("2025-01-07"), tipo: "PROVEER ESCRITO (AUTO DE SUSTANCIACION)", actividad: "VISTOS: Agréguese a los autos el oficio del Registro de la Propiedad del cantón Huamboya, que comunica el cumplimiento de la inscripción de la prohibición de enajenar." },
+  ];
+
+  test("toma la fecha de presentacion del oficio del Registro (17-dic), no la de la providencia (7-ene)", () => {
+    const r = detectorCicloVidaMedidaCautelar(caso);
+    assert.equal(r.fechaOrdenJudicial, "2024-11-20");
+    assert.equal(r.fechaOficio, "2024-12-05");
+    assert.equal(r.fechaInscripcion, "2024-12-17");
+    assert.equal(r.estadoCicloVida, "INSCRIPCION_CONFIRMADA");
+  });
+
+  test("si no hay una presentacion anterior, queda la fecha de la providencia", () => {
+    const sinEscrito = caso.filter((a) => a.codigo !== 3);
+    const r = detectorCicloVidaMedidaCautelar(sinEscrito);
+    assert.equal(r.fechaInscripcion, "2025-01-07");
+  });
+
+  test("una presentacion anterior al oficio del juzgado no cuenta (no puede ser su respuesta)", () => {
+    const antes = [
+      { codigo: 0, fecha: f("2024-11-25"), tipo: "ESCRITO", actividad: "Escrito, FePresentacion" },
+      ...caso.filter((a) => a.codigo !== 3),
+    ];
+    const r = detectorCicloVidaMedidaCautelar(antes);
+    assert.equal(r.fechaInscripcion, "2025-01-07");
+  });
+});

@@ -395,6 +395,29 @@ export interface AnalisisCicloVidaMedida {
   };
 }
 
+function diaDeActuacion(a: any): string {
+  return String(a?.fecha || a?.fechaProvidencia || a?.fechaActuacion || "").slice(0, 10);
+}
+
+// Cuando una providencia dice "agréguese a los autos el oficio del Registro", el
+// oficio ya habia sido presentado antes: se busca esa presentacion (una actuacion
+// OFICIO o ESCRITO de tipo "FePresentacion") posterior al oficio del juzgado y
+// anterior a la providencia, y se devuelve su fecha. null si no hay.
+function presentacionDelOficioRegistral(ordenadas: any[], providencia: any, desdeOficio: string | null): string | null {
+  const texto = String(providencia?.actividad || providencia?.nombreActuacion || "").toLowerCase();
+  if (!/agr[eé]guese/.test(texto)) return null;
+  const dia = diaDeActuacion(providencia);
+  const candidatas = ordenadas.filter((a) => {
+    if (a === providencia) return false;
+    const d = diaDeActuacion(a);
+    if (!d || d >= dia || d < (desdeOficio ?? "")) return false;
+    const tipo = String(a?.tipo || "").toUpperCase();
+    if (!tipo.includes("OFICIO") && !tipo.includes("ESCRITO")) return false;
+    return String(a?.actividad || a?.nombreActuacion || "").toLowerCase().includes("fepresentacion");
+  });
+  return candidatas.length ? diaDeActuacion(candidatas[candidatas.length - 1]) : null;
+}
+
 export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCicloVidaMedida {
   let me: AnalisisCicloVidaMedida = {
     medidaDetectada: false,
@@ -502,9 +525,20 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
           me.confianza = "ALTA";
           me.evidenciaTextual = `"${matchIzad[0]}"`;
         } else {
-          me.fechaInscripcion = fechaLimpia;
-          me.confianza = "MEDIA";
-          me.evidenciaTextual = `"${actividad.slice(0, 260)}..."`;
+          // Sin una fecha escrita en el texto. Si esta actuacion es la providencia en
+          // que el juez "agrega a los autos" el oficio del Registro, la inscripcion se
+          // da por comunicada cuando el oficio se PRESENTO, no cuando el juez lo
+          // agrega (criterio de la oficial juridica).
+          const presentacion = presentacionDelOficioRegistral(actuacionesOrdenadas, act, me.fechaOficio);
+          if (presentacion) {
+            me.fechaInscripcion = presentacion;
+            me.confianza = "MEDIA";
+            me.evidenciaTextual = `Oficio del Registro presentado el ${presentacion}; el juez lo agregó al proceso el ${fechaLimpia}.`;
+          } else {
+            me.fechaInscripcion = fechaLimpia;
+            me.confianza = "MEDIA";
+            me.evidenciaTextual = `"${actividad.slice(0, 260)}..."`;
+          }
         }
 
         if (matchRepertorio && !me.numeroRepertorio) {
