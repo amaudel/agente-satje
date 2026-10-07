@@ -267,11 +267,18 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         });
     };
 
-    document.addEventListener('DOMContentLoaded', function() {
+    // Secciones que se llenan aparte (resumen de IA, valor de la demanda). Se lanzan
+    // al cargar la pagina Y tambien cuando la consulta se hace desde la propia
+    // pagina, que cambia el contenido sin recargar y no dispara DOMContentLoaded.
+    window.cargarPendientes = function() {
       var box = document.getElementById('resumenIaText');
       if (box && box.getAttribute('data-pendiente') === '1') window.cargarResumenIA();
       var boxValor = document.getElementById('valorDemandaBox');
       if (boxValor && boxValor.getAttribute('data-pendiente') === '1') window.cargarValorDemanda();
+    };
+
+    document.addEventListener('DOMContentLoaded', function() {
+      window.cargarPendientes();
     });
 
     // BUSCAR POSIBLE REINICIO TRAS ABANDONO PROCESAL (busca por cedula y
@@ -849,6 +856,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           window.scrollTo({ top: 0, behavior: 'smooth' });
           window.inicializarEventosFormularios();
           window.verificarSesionAuth();
+          window.cargarPendientes();
         })
         .catch(function(err) {
           console.error("Error al cargar consulta:", err);

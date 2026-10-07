@@ -396,3 +396,36 @@ test("valor de la demanda: la tarjeta solo existe cuando hay una causa con actua
   assert.ok(!generarDashboardHTML(null).includes('id="valorDemandaBox"'));
   assert.ok(generarDashboardHTML({ causa: "01333-2026-10304", total_actuaciones: 10 }).includes('id="valorDemandaBox"'));
 });
+
+// ---- Al consultar desde la propia pagina (sin recargar) tambien deben cargarse
+// las secciones pendientes: resumen de IA y valor de la demanda.
+
+test("consulta sin recargar: se lanzan el resumen de IA y el valor de la demanda", async () => {
+  const llamadas: string[] = [];
+  const { sandbox, el } = crearEntorno(async (url: string) => {
+    llamadas.push(url);
+    if (url.includes("valor-demanda")) return { ok: true, json: async () => ({ ok: true, encontrado: false, motivo: "m" }) };
+    if (url.includes("resumen-ia")) return { ok: true, json: async () => ({ ok: true, resumen: "R" }) };
+    return { ok: true, text: async () => "<html></html>" };
+  });
+  sandbox.DOMParser = class {
+    parseFromString() {
+      return { querySelector: () => ({ innerHTML: "nuevo" }) };
+    }
+  };
+  sandbox.document.querySelector = (sel: string) => (sel === ".container" ? { innerHTML: "" } : null);
+  sandbox.history.pushState = () => {};
+  sandbox.scrollTo = () => {};
+  sandbox.window.scrollTo = () => {};
+  sandbox.activarModalCarga = () => {};
+  sandbox.inicializarEventosFormularios = () => {};
+  sandbox.verificarSesionAuth = () => {};
+  el("resumenIaText").getAttribute = () => "1";
+  el("valorDemandaBox").getAttribute = () => "1";
+
+  sandbox.ejecutarConsultaClientSide("/?causa=01333-2026-04436");
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 5));
+
+  assert.ok(llamadas.some((u) => u.includes("resumen-ia")), "no pidio el resumen de IA");
+  assert.ok(llamadas.some((u) => u.includes("valor-demanda")), "no pidio el valor de la demanda");
+});

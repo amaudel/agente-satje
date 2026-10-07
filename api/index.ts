@@ -700,6 +700,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           })
         );
         const docs = leidos.filter((d): d is DocTexto => d !== null);
+        console.log(`[valor] causa=${r.causa} elegidas=${elegidas.length} leidos=${docs.length} caracteres=${docs.reduce((n, d) => n + d.texto.length, 0)}`);
         if (docs.length === 0) {
           return res.status(200).json({
             ok: true,
@@ -725,7 +726,9 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         } catch {
           propuesta = null;
         }
-        return res.status(200).json({ ok: true, ...interpretarRespuestaValor(propuesta, docs) });
+        const resultadoValor = interpretarRespuestaValor(propuesta, docs);
+        console.log(`[valor] causa=${r.causa} modelo_encontrado=${propuesta?.encontrado === true} aceptado=${resultadoValor.encontrado}${resultadoValor.encontrado ? "" : " motivo=" + resultadoValor.motivo}`);
+        return res.status(200).json({ ok: true, ...resultadoValor });
       } catch (errValor: any) {
         return res.status(500).json({ ok: false, error: errValor?.message || String(errValor) });
       }
