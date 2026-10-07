@@ -29,6 +29,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const total = datos?.total_actuaciones || 0;
   const datosIncompletos = datos?.datos_incompletos === true;
   const fechaIngresoCausa: string | null = datos?.fecha_ingreso || null;
+  const mostrarValorDemanda = Boolean(causa) && Number(datos?.total_actuaciones) > 0;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
   const actuaciones = datos?.actuaciones_recientes || [];
@@ -226,9 +227,48 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         });
     };
 
+    function formatoDinero(valor, moneda) {
+      var n = Number(valor);
+      if (!isFinite(n)) return esc(valor);
+      var partes = n.toFixed(2).split('.');
+      partes[0] = partes[0].replace(/\\B(?=(\\d{3})+(?!\\d))/g, ',');
+      return esc(moneda || 'USD') + ' ' + partes.join('.');
+    }
+
+    window.cargarValorDemanda = function() {
+      var box = document.getElementById('valorDemandaBox');
+      if (!box) return;
+      var causa = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      if (!causa) { box.innerHTML = '⚠️ No hay causa seleccionada.'; return; }
+      fetch('/?action=valor-demanda&causa=' + encodeURIComponent(causa))
+        .then(function(r) { return r.json(); })
+        .then(function(res) {
+          if (!res.ok) {
+            box.innerHTML = '⚠️ ' + esc(res.error || 'No se pudo leer el valor de la demanda.');
+            return;
+          }
+          if (!res.encontrado) {
+            box.innerHTML = '<strong>No se encontró el valor de la demanda.</strong> <span style="color:var(--text-muted);">' + esc(res.motivo || '') + '</span>';
+            return;
+          }
+          var fuente = res.fuente || {};
+          box.innerHTML =
+            '<div style="font-size:1.9rem; font-weight:800; color:#fff;">' + formatoDinero(res.valor, res.moneda) + '</div>' +
+            (res.concepto ? '<div style="font-size:0.85rem; color:var(--text-muted);">Concepto: ' + esc(res.concepto) + '</div>' : '') +
+            (res.evidencia ? '<div style="margin-top:0.5rem; padding:0.5rem 0.8rem; border-left:3px solid #22c55e; font-style:italic; color:#e2e8f0;">“' + esc(res.evidencia) + '”</div>' : '') +
+            '<div style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-muted);">Fuente: ' + esc(fuente.tipo || 'documento del expediente') + (fuente.fecha ? ' (' + esc(fuente.fecha) + ')' : '') + (fuente.nombreArchivo ? ' · ' + esc(fuente.nombreArchivo) : '') + '</div>' +
+            '<div style="margin-top:0.3rem; font-size:0.78rem; color:var(--warning);">Valor leído por IA del documento: verifica con la demanda original.</div>';
+        })
+        .catch(function(err) {
+          box.innerHTML = '⚠️ Error de conexión: ' + esc(err.message);
+        });
+    };
+
     document.addEventListener('DOMContentLoaded', function() {
       var box = document.getElementById('resumenIaText');
       if (box && box.getAttribute('data-pendiente') === '1') window.cargarResumenIA();
+      var boxValor = document.getElementById('valorDemandaBox');
+      if (boxValor && boxValor.getAttribute('data-pendiente') === '1') window.cargarValorDemanda();
     });
 
     // BUSCAR POSIBLE REINICIO TRAS ABANDONO PROCESAL (busca por cedula y
@@ -1158,6 +1198,13 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
               </div>
             </div>
           </div>
+
+          ${mostrarValorDemanda ? `
+          <!-- VALOR POR EL QUE SE DEMANDA (se lee aparte de los documentos del inicio) -->
+          <div class="kpi-card" style="grid-column: 1 / -1; border-left: 6px solid #22c55e;">
+            <div class="kpi-tag" style="color:#22c55e;">💲 VALOR DE LA DEMANDA</div>
+            <div id="valorDemandaBox" data-pendiente="1" style="margin-top:0.5rem; color:#cbd5e1;">⏳ Buscando el valor de la demanda en los documentos del inicio del juicio… esto tarda unos segundos.</div>
+          </div>` : ''}
 
           <!-- PANEL 1: ESTADO DE SENTENCIA -->
           <div class="kpi-card ${poseeSentencia ? 'sentencia-si' : 'sentencia-no'}">

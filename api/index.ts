@@ -21,6 +21,13 @@ import {
   generarLoginHTML,
 } from "../lib/auth.js";
 import { esAccionDeCobro, esDemandanteErco } from "../lib/cadena-cobro.js";
+import {
+  elegirActuacionesParaValor,
+  interpretarRespuestaValor,
+  promptUsuarioValor,
+  PROMPT_SISTEMA_VALOR,
+  type DocTexto,
+} from "../lib/valor-demanda.js";
 import { consultarLimite, registrarFallo, limpiarLimite, ipDelCliente } from "../lib/rate-limit.js";
 import { mapConcurrente } from "../lib/concurrencia.js";
 import { CHAT_TOOLS, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
@@ -630,6 +637,97 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         });
       } catch (errEstado: any) {
         return res.status(500).json({ ok: false, error: errEstado?.message || String(errEstado) });
+      }
+    }
+
+    // 2d-bis. VALOR POR EL QUE SE DEMANDA. Se lee de los documentos del inicio del
+    // juicio (demanda, autos de calificacion) con un modelo de lenguaje, y solo se
+    // acepta si el valor figura literalmente en el texto. Se pide aparte, como el
+    // resumen de IA, porque descargar y leer PDFs tarda.
+    if (req.query.action === "valor-demanda" || bodyData.action === "valor-demanda") {
+      const causaValor = String(bodyData.causa || req.query.causa || "").trim();
+      if (!causaValor) return res.status(400).json({ ok: false, error: "Falta la causa." });
+      if (!openaiKey) return res.status(500).json({ ok: false, error: "API Key de OpenAI no configurada." });
+      const baseUrlValor = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKeyValor = process.env.SATJE_API_KEY;
+      if (!apiKeyValor) return res.status(500).json({ ok: false, error: "SATJE_API_KEY no esta configurado en el servidor." });
+      const headersValor: Record<string, string> = { Accept: "application/json", "Content-Type": "application/json", "X-API-Key": apiKeyValor };
+      try {
+        const r = await procesarCausaIndividual(causaValor, baseUrlValor, apiKeyValor);
+        if (r.backendError) {
+          return res.status(502).json({ ok: false, error: `No se pudo consultar SATJE (${r.backendError}).` });
+        }
+        const elegidas = elegirActuacionesParaValor(r.actuaciones, 3);
+        if (elegidas.length === 0) {
+          return res.status(200).json({ ok: true, encontrado: false, motivo: "No hay documentos del inicio del juicio para leer." });
+        }
+        const idJuicioValor = sinSeparadoresCausa(String(r.causa));
+
+        const leidos = await Promise.all(
+          elegidas.map(async (act: any): Promise<DocTexto | null> => {
+            try {
+              const resDocs = await fetch(
+                `${baseUrlValor}/api/v1/causas/${encodeURIComponent(idJuicioValor)}/actuaciones/${encodeURIComponent(act.codigo)}/documentos`,
+                { headers: headersValor, signal: AbortSignal.timeout(TIMEOUT_DOCUMENTOS_MS) }
+              );
+              if (!resDocs.ok) return null;
+              const docsData: any = await resDocs.json();
+              const documentos: any[] = (Array.isArray(docsData?.data) ? docsData.data : []).filter((d: any) => d?.documentoId).slice(0, 2);
+              const textos = await Promise.all(
+                documentos.map(async (d: any) => {
+                  try {
+                    const resText = await fetch(`${baseUrlValor}/api/v1/documentos/hba/extract-text`, {
+                      method: "POST",
+                      headers: headersValor,
+                      body: JSON.stringify({ documentoId: d.documentoId }),
+                      signal: AbortSignal.timeout(25000),
+                    });
+                    if (!resText.ok) return "";
+                    const t: any = await resText.json();
+                    return String(t?.text || "");
+                  } catch {
+                    return "";
+                  }
+                })
+              );
+              const texto = textos.join("\n").trim().slice(0, 6000);
+              if (!texto) return null;
+              const fecha = String(act.fecha ?? "").slice(0, 10) || null;
+              return { codigoActuacion: act.codigo, tipo: String(act.tipo ?? ""), fecha, nombreArchivo: documentos[0]?.nombreArchivo, texto };
+            } catch {
+              return null;
+            }
+          })
+        );
+        const docs = leidos.filter((d): d is DocTexto => d !== null);
+        if (docs.length === 0) {
+          return res.status(200).json({
+            ok: true,
+            encontrado: false,
+            motivo: "No se pudo leer el texto de los documentos del inicio (puede ser un PDF escaneado).",
+          });
+        }
+
+        const openai = new OpenAI({ apiKey: openaiKey });
+        const completion = await openai.chat.completions.create({
+          model: "gpt-4o-mini",
+          temperature: 0,
+          max_tokens: 300,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: PROMPT_SISTEMA_VALOR },
+            { role: "user", content: promptUsuarioValor(docs) },
+          ],
+        });
+        let propuesta: any = null;
+        try {
+          propuesta = JSON.parse(completion.choices[0]?.message?.content || "null");
+        } catch {
+          propuesta = null;
+        }
+        return res.status(200).json({ ok: true, ...interpretarRespuestaValor(propuesta, docs) });
+      } catch (errValor: any) {
+        return res.status(500).json({ ok: false, error: errValor?.message || String(errValor) });
       }
     }
 

@@ -6,7 +6,7 @@ import { generarDashboardHTML } from "./dashboard-html.js";
 // Ejecuta de verdad el JavaScript de la pagina (con un DOM y un fetch
 // simulados) para comprobar el comportamiento del lote supervisor por grupos.
 
-function crearEntorno(fetchMock: (url: string, init: any) => Promise<any>) {
+function crearEntorno(fetchMock: (url: string, init: any) => Promise<any>, datosPagina: any = { causa: "x" }) {
   const elementos = new Map<string, any>();
   const el = (id: string) => {
     if (!elementos.has(id)) {
@@ -37,7 +37,7 @@ function crearEntorno(fetchMock: (url: string, init: any) => Promise<any>) {
   };
   sandbox.window = sandbox;
 
-  const html = generarDashboardHTML({ causa: "x" });
+  const html = generarDashboardHTML(datosPagina);
   const scripts = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)];
   vm.createContext(sandbox);
   vm.runInContext(scripts[0][1], sandbox);
@@ -347,4 +347,52 @@ test("cedula: si falla la consulta de un juicio lo dice y no inventa estado", as
   const { html } = await consultarCedula([CASO[3]], {});
   assert.ok(html.includes("No se pudo consultar"));
   assert.ok(!html.includes("ABANDONADO"));
+});
+
+
+// ---- Tarjeta "Valor de la demanda": se carga aparte, como el resumen de IA.
+
+async function cargarValor(respuesta: any) {
+  const { sandbox, el } = crearEntorno(
+    async () => ({ ok: true, json: async () => respuesta }),
+    { causa: "01333-2026-10304", total_actuaciones: 10 }
+  );
+  sandbox.cargarValorDemanda();
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 5));
+  return el("valorDemandaBox").innerHTML as string;
+}
+
+test("valor de la demanda: muestra el monto, la cita, el documento de origen y pide verificar", async () => {
+  const out = await cargarValor({
+    ok: true,
+    encontrado: true,
+    valor: 5234.1,
+    moneda: "USD",
+    concepto: "cuantia",
+    evidencia: "La cuantia se fija en 5.234,10 dolares",
+    fuente: { codigoActuacion: 5, tipo: "CALIFICACION DE SOLICITUD Y/O DEMANDA", fecha: "2026-09-12", nombreArchivo: "calificacion.pdf" },
+  });
+  assert.ok(out.includes("5,234.10"));
+  assert.ok(out.includes("USD"));
+  assert.ok(out.includes("La cuantia se fija en 5.234,10 dolares"));
+  assert.ok(out.includes("calificacion.pdf"));
+  assert.ok(out.toLowerCase().includes("verifica"));
+});
+
+test("valor de la demanda: si no se encontro, lo dice y no muestra monto", async () => {
+  const out = await cargarValor({ ok: true, encontrado: false, motivo: "No se encontró el valor de la demanda en los documentos del inicio del juicio." });
+  assert.ok(out.includes("No se encontró"));
+  assert.ok(!out.includes("USD"));
+});
+
+test("valor de la demanda: un error del servicio se muestra como aviso", async () => {
+  const out = await cargarValor({ ok: false, error: "API Key de OpenAI no configurada." });
+  assert.ok(out.includes("⚠️"));
+  assert.ok(out.includes("OpenAI"));
+});
+
+test("valor de la demanda: la tarjeta solo existe cuando hay una causa con actuaciones", () => {
+  assert.ok(!generarDashboardHTML({ causa: "x" }).includes('id="valorDemandaBox"'));
+  assert.ok(!generarDashboardHTML(null).includes('id="valorDemandaBox"'));
+  assert.ok(generarDashboardHTML({ causa: "01333-2026-10304", total_actuaciones: 10 }).includes('id="valorDemandaBox"'));
 });
