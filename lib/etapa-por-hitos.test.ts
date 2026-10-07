@@ -164,3 +164,65 @@ test("indica en que actuacion se basa la etapa (para que se pueda verificar)", (
   assert.equal(r?.fechaEtapa, "2026-09-09");
   assert.equal(r?.hitoEtapa, "CARATULA SORTEO DE DEPRECATORIOS");
 });
+
+// ---- La fecha de la etapa es la de su INICIO, no la de la ultima actuacion.
+
+test("citacion: la etapa empieza el dia de la calificacion, no con la ultima razon de citacion", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2026-09-16", "RAZON ENVIO A CITACIONES (NOMBRE CITADO)"),
+    act("2026-09-10", "CITACIÓN: No realizada - OTROS"),
+    act("2026-07-16", "ACTA DE SORTEO"),
+    act("2026-07-16", "CARATULA SORTEO DE DEPRECATORIOS"),
+    act("2026-07-15", "CALIFICACION DE SOLICITUD Y/O DEMANDA (AUTO)"),
+    act("2026-07-14", "ACTA DE SORTEO"),
+    act("2026-07-14", "CARATULA DE JUICIO"),
+  ])!;
+  assert.equal(r.etapaGeneral, "04. CITACIÓN");
+  assert.equal(r.fechaEtapa, "2026-07-15");
+  assert.equal(r.hitoEtapa, "CALIFICACION DE SOLICITUD Y/O DEMANDA");
+});
+
+test("citacion sin calificacion a la vista: empieza con su primera actuacion de citacion", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2025-08-20", "RAZON ENVIO A CITACIONES (NOMBRE)"),
+    act("2025-08-13", "RAZON ENVIO A CITACIONES (NOMBRE)"),
+    act("2025-07-29", "RAZON ENVIO A CITACIONES (NOMBRE)"),
+  ])!;
+  assert.equal(r.fechaEtapa, "2025-07-29");
+});
+
+test("ejecucion: empieza con la primera actuacion de ejecucion (perito), no con el mandamiento posterior", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2025-05-01", "MANDAMIENTO DE EJECUCION (AUTO INTERLOCUTORIO)"),
+    act("2025-02-04", "NOMBRAMIENTO DE PERITO (AUTO DE SUSTANCIACION)"),
+    act("2025-01-20", "RAZON DE EJECUTORIA (RAZON)"),
+    act("2025-01-01", "SENTENCIA (RESOLUCION)"),
+  ])!;
+  assert.equal(r.etapaGeneral, "10. EJECUCION");
+  assert.equal(r.fechaEtapa, "2025-02-04");
+  assert.equal(r.hitoEtapa, "NOMBRAMIENTO DE PERITO");
+});
+
+test("archivado: empieza con el primer auto de archivo", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2024-03-01", "SOLUCION O PAGO Y/O EXTINCION DE LA OBLIGACION (AUTO)"),
+    act("2024-01-10", "ABANDONO POR FALTA DE IMPULSO PROCESAL ART. 245 (AUTO)"),
+  ])!;
+  assert.equal(r.fechaEtapa, "2024-01-10");
+});
+
+test("calificacion: la etapa empieza el dia de la calificacion", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2026-09-30", "CALIFICACION DE SOLICITUD Y/O DEMANDA (RAZON DE NOTIFICACION)"),
+    act("2026-09-28", "ACTA DE SORTEO"),
+    act("2026-09-28", "CARATULA DE JUICIO"),
+  ])!;
+  assert.equal(r.etapaGeneral, "03. CALIFICACION");
+  assert.equal(r.fechaEtapa, "2026-09-30");
+});
+
+test("sorteo: empieza el dia del sorteo", () => {
+  const r = clasificarEtapaPorHitos([act("2026-10-05", "ACTA DE SORTEO"), act("2026-10-04", "CARATULA DE JUICIO")])!;
+  assert.equal(r.etapaGeneral, "02. SORTEO");
+  assert.equal(r.fechaEtapa, "2026-10-04");
+});

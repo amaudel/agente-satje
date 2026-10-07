@@ -183,29 +183,67 @@ export function clasificarEtapaPorHitos(actuaciones: any[]): ClasificacionConFec
   const delDia = hitos.filter((h) => h.fecha === fechaTop);
   const vigente = delDia.reduce((a, b) => (PRIORIDAD[b.clave] > PRIORIDAD[a.clave] ? b : a));
 
+  // Se decide la etapa y cual es el hito de referencia dentro de ella; la fecha
+  // de la etapa es la de su INICIO (ver inicioDeLaEtapa), no la del ultimo hito.
+  let clave: Clave = vigente.clave;
+  let subEtapa = vigente.sub;
+  let ref: Hito = vigente;
+
   if (vigente.clave === "ejecutoria") {
     // La razon de ejecutoria tambien se sienta al archivar: manda el hito anterior.
     const anterior = hitos.find((h) => h.clave !== "ejecutoria" && (h.fecha ?? "") <= (vigente.fecha ?? ""));
-    if (anterior?.clave === "archivo") return armar("archivo", anterior.sub, vigente.fecha, anterior.base);
-    if (anterior?.clave === "ejecucion") return armar("ejecucion", anterior.sub, anterior.fecha, anterior.base);
-    return armar("ejecutoria", vigente.sub, vigente.fecha, vigente.base);
-  }
-
-  if (vigente.clave === "citacion" && vigente.sub.startsWith("04.1")) {
+    if (anterior?.clave === "archivo" || anterior?.clave === "ejecucion") {
+      clave = anterior.clave;
+      subEtapa = anterior.sub;
+      ref = anterior;
+    }
+  } else if (vigente.clave === "citacion" && vigente.sub.startsWith("04.1")) {
     // Si en todo el historial hubo deprecatorio, la citacion se hace por deprecatorio.
     if (hitos.some((h) => h.base.includes("DEPRECATORIO") || h.base.includes("DEPRECAD"))) {
-      return armar("citacion", "04.3. Cita. - Deprecatorio", vigente.fecha, vigente.base);
+      subEtapa = "04.3. Cita. - Deprecatorio";
     }
-  }
-
-  if (vigente.clave === "calificacion") {
+  } else if (vigente.clave === "calificacion") {
     // Calificada y oficiada el mismo dia (o despues): ya se esta citando por oficio.
     const oficiado = actuaciones.some((a) => {
       const base = sinAcentos(String(a?.tipo ?? "")).split(" (")[0].trim();
       return base.startsWith("OFICIO") && (fechaDe(a) ?? "") >= (vigente.fecha ?? "9");
     });
-    if (oficiado) return armar("citacion", "04.1. Cita. - Ofi. Citaciones", vigente.fecha, vigente.base);
+    if (oficiado) {
+      clave = "citacion";
+      subEtapa = "04.1. Cita. - Ofi. Citaciones";
+    }
   }
 
-  return armar(vigente.clave, vigente.sub, vigente.fecha, vigente.base);
+  const inicio = inicioDeLaEtapa(hitos, ref);
+  return armar(clave, subEtapa, inicio.fecha, inicio.base);
+}
+
+// La calificacion y la citacion forman un mismo tramo: la citacion empieza el dia
+// en que se califica la demanda y se ordena citar.
+const GRUPO_ETAPA: Record<Clave, string> = {
+  archivo: "archivo",
+  ejecutoria: "ejecutoria",
+  ejecucion: "ejecucion",
+  apelacion: "apelacion",
+  sentencia: "sentencia",
+  mediacion: "mediacion",
+  audiencia: "audiencia",
+  citacion: "citacion",
+  calificacion: "citacion",
+  sorteo: "sorteo",
+};
+
+// Inicio de la etapa: la fecha del hito mas antiguo del tramo continuo de hitos
+// de la misma etapa que termina en `ref` (hitos va de lo mas reciente a lo mas
+// antiguo). Los sorteos intercalados (el del deprecatorio, el del perito) no
+// cortan el tramo.
+function inicioDeLaEtapa(hitos: Hito[], ref: Hito): Hito {
+  let inicio = ref;
+  for (let k = hitos.indexOf(ref) + 1; k < hitos.length; k++) {
+    const h = hitos[k];
+    if (h.clave === "sorteo" && ref.clave !== "sorteo") continue;
+    if (GRUPO_ETAPA[h.clave] !== GRUPO_ETAPA[ref.clave]) break;
+    inicio = h;
+  }
+  return inicio;
 }
