@@ -28,6 +28,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const resumenPendiente = datos?.resumen_pendiente === true;
   const total = datos?.total_actuaciones || 0;
   const datosIncompletos = datos?.datos_incompletos === true;
+  const fechaIngresoCausa: string | null = datos?.fecha_ingreso || null;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
   const actuaciones = datos?.actuaciones_recientes || [];
@@ -1143,6 +1144,19 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             </div>
 
             <p style="font-size:0.95rem; color:#cbd5e1; margin-top:0.6rem;">${escapeHtml(etapa.explicacion)}</p>
+
+            <div style="display:flex; gap:1.2rem; flex-wrap:wrap; margin-top:0.9rem; padding-top:0.8rem; border-top:1px solid var(--border);">
+              <div>
+                <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); letter-spacing:0.04em;">📅 FECHA DE LA ETAPA</div>
+                <div style="font-size:1.25rem; font-weight:800; color:#fff;">${etapa.fechaEtapa ? escapeHtml(etapa.fechaEtapa) : '<span style="color:var(--text-muted);">No determinada</span>'}</div>
+                ${etapa.fechaEtapa && etapa.hitoEtapa ? `<div style="font-size:0.78rem; color:var(--text-muted);">según: ${escapeHtml(etapa.hitoEtapa)}</div>` : ''}
+              </div>
+              <div>
+                <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); letter-spacing:0.04em;">📥 FECHA DE INGRESO (DEMANDA)</div>
+                <div style="font-size:1.25rem; font-weight:800; color:#fff;">${fechaIngresoCausa ? escapeHtml(fechaIngresoCausa) : '<span style="color:var(--text-muted);">No disponible</span>'}</div>
+                ${fechaIngresoCausa ? '<div style="font-size:0.78rem; color:var(--text-muted);">primera actuación en SATJE</div>' : ''}
+              </div>
+            </div>
           </div>
 
           <!-- PANEL 1: ESTADO DE SENTENCIA -->

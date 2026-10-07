@@ -159,6 +159,13 @@ export async function procesarCausaIndividual(
     );
   }
 
+  // Fecha de ingreso: la de la primera actuacion del expediente (la caratula).
+  let fechaIngreso: string | null = null;
+  for (const a of actuaciones) {
+    const m = String(a?.fecha ?? a?.fechaProvidencia ?? a?.fechaActuacion ?? "").match(/^(\d{4}-\d{2}-\d{2})/);
+    if (m && (fechaIngreso === null || m[1] < fechaIngreso)) fechaIngreso = m[1];
+  }
+
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
   const cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
@@ -167,6 +174,7 @@ export async function procesarCausaIndividual(
   return {
     causa: causaFormateada,
     backendError,
+    fechaIngreso,
     datosIncompletos: erroresParciales.length > 0,
     erroresParciales,
     etapaProcesalGeneral: clasificacionEtapa.etapaGeneral,

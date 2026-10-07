@@ -154,3 +154,13 @@ test("sanitizarTipo quita los nombres de las partes pero conserva el tipo", () =
   assert.equal(sanitizarTipo("OFICIO (OFICIO)"), "OFICIO (OFICIO)");
   assert.equal(sanitizarTipo("ESCRITO"), "ESCRITO");
 });
+
+test("indica en que actuacion se basa la etapa (para que se pueda verificar)", () => {
+  const r = clasificarEtapaPorHitos([
+    act("2026-09-30", "ESCRITO"),
+    act("2026-09-09", "CARATULA SORTEO DE DEPRECATORIOS"),
+    act("2026-09-09", "ACTA DE SORTEO"),
+  ]);
+  assert.equal(r?.fechaEtapa, "2026-09-09");
+  assert.equal(r?.hitoEtapa, "CARATULA SORTEO DE DEPRECATORIOS");
+});

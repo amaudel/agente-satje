@@ -137,6 +137,8 @@ export interface ClasificacionEtapa {
   explicacion: string;
   // Fecha del hito que define la etapa (solo la calcula el clasificador por hitos).
   fechaEtapa?: string | null;
+  // Actuacion (su tipo) en la que se basa la etapa; permite verificarla.
+  hitoEtapa?: string | null;
 }
 
 export function clasificarEtapaProcesal(actuaciones: any[]): ClasificacionEtapa {

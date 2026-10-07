@@ -92,3 +92,33 @@ test("no muestra el aviso de informacion incompleta cuando la respuesta fue comp
   const html = generarDashboardHTML({ causa: "01333-2026-10304", datos_incompletos: false });
   assert.ok(!html.includes('id="avisoIncompleto"'));
 });
+
+test("la tarjeta de etapa muestra la fecha de la etapa, su actuacion de origen y la fecha de ingreso", () => {
+  const html = generarDashboardHTML({
+    causa: "01333-2026-10304",
+    fecha_ingreso: "2026-09-09",
+    clasificacion_etapa: {
+      etapaGeneral: "04. CITACIÓN",
+      etapaEspecifica: "04.3. Cita. - Deprecatorio",
+      codigoEtapa: "04",
+      explicacion: "Se está citando a la parte demandada.",
+      fechaEtapa: "2026-09-09",
+      hitoEtapa: "CARATULA SORTEO DE DEPRECATORIOS",
+    },
+  });
+  const tarjeta = html.slice(html.indexOf("CLASIFICACIÓN DE ETAPA PROCESAL"), html.indexOf("CLASIFICACIÓN DE ETAPA PROCESAL") + 2500);
+  assert.ok(tarjeta.toUpperCase().includes("FECHA DE LA ETAPA"));
+  assert.ok(tarjeta.includes("2026-09-09"));
+  assert.ok(tarjeta.includes("CARATULA SORTEO DE DEPRECATORIOS"));
+  assert.ok(tarjeta.toUpperCase().includes("FECHA DE INGRESO"));
+});
+
+test("si no se pudo determinar la fecha de la etapa lo dice en vez de inventarla", () => {
+  const html = generarDashboardHTML({
+    causa: "x",
+    fecha_ingreso: null,
+    clasificacion_etapa: { etapaGeneral: "02. SORTEO", etapaEspecifica: "02.1.", codigoEtapa: "02", explicacion: "e", fechaEtapa: null },
+  });
+  const tarjeta = html.slice(html.indexOf("CLASIFICACIÓN DE ETAPA PROCESAL"), html.indexOf("CLASIFICACIÓN DE ETAPA PROCESAL") + 2500);
+  assert.ok(tarjeta.includes("No determinada"));
+});

@@ -64,3 +64,32 @@ test("una respuesta completa no se marca como incompleta", async () => {
     assert.deepEqual(r.erroresParciales, []);
   });
 });
+
+test("la fecha de ingreso es la de la primera actuacion del expediente", async () => {
+  const cuerpo = {
+    success: true,
+    partialErrors: [],
+    incidentes: [
+      { incidente: 2, nombreJudicatura: "MACHALA", actuaciones: [{ codigo: 9, fecha: "2021-10-20T10:00:00.000+00:00", tipo: "RAZON (RAZON)" }] },
+      {
+        incidente: 1,
+        nombreJudicatura: "CUENCA",
+        actuaciones: [
+          { codigo: 2, fecha: "2021-06-14T10:00:00.000+00:00", tipo: "CALIFICACION DE SOLICITUD Y/O DEMANDA (AUTO)" },
+          { codigo: 1, fecha: "2021-06-11T10:00:00.000+00:00", tipo: "CARATULA DE JUICIO" },
+        ],
+      },
+    ],
+  };
+  await conFetch(cuerpo, async () => {
+    const r: any = await procesarCausaIndividual("01333202104334", "https://backend.test", "k");
+    assert.equal(r.fechaIngreso, "2021-06-11");
+  });
+});
+
+test("sin actuaciones no hay fecha de ingreso", async () => {
+  await conFetch({ success: true, partialErrors: [], incidentes: [] }, async () => {
+    const r: any = await procesarCausaIndividual("01333202104334", "https://backend.test", "k");
+    assert.equal(r.fechaIngreso, null);
+  });
+});

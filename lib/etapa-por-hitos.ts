@@ -37,6 +37,9 @@ const PRIORIDAD: Record<Clave, number> = {
 
 export interface ClasificacionConFecha extends ClasificacionEtapa {
   fechaEtapa: string | null;
+  // Tipo de la actuacion que define la etapa (sin el parentesis, que puede
+  // traer nombres de personas).
+  hitoEtapa: string | null;
 }
 
 interface Hito {
@@ -140,9 +143,16 @@ const GENERAL: Record<Clave, { general: string; codigo: string; explicacion: str
   sorteo: { general: "02. SORTEO", codigo: "02", explicacion: "Solo consta el sorteo de la causa." },
 };
 
-function armar(clave: Clave, sub: string, fecha: string | null): ClasificacionConFecha {
+function armar(clave: Clave, sub: string, fecha: string | null, base: string): ClasificacionConFecha {
   const g = GENERAL[clave];
-  return { etapaGeneral: g.general, etapaEspecifica: sub, codigoEtapa: g.codigo, explicacion: g.explicacion, fechaEtapa: fecha };
+  return {
+    etapaGeneral: g.general,
+    etapaEspecifica: sub,
+    codigoEtapa: g.codigo,
+    explicacion: g.explicacion,
+    fechaEtapa: fecha,
+    hitoEtapa: base.split(" (")[0].trim() || null,
+  };
 }
 
 export function clasificarEtapaPorHitos(actuaciones: any[]): ClasificacionConFecha | null {
@@ -176,15 +186,15 @@ export function clasificarEtapaPorHitos(actuaciones: any[]): ClasificacionConFec
   if (vigente.clave === "ejecutoria") {
     // La razon de ejecutoria tambien se sienta al archivar: manda el hito anterior.
     const anterior = hitos.find((h) => h.clave !== "ejecutoria" && (h.fecha ?? "") <= (vigente.fecha ?? ""));
-    if (anterior?.clave === "archivo") return armar("archivo", anterior.sub, vigente.fecha);
-    if (anterior?.clave === "ejecucion") return armar("ejecucion", anterior.sub, anterior.fecha);
-    return armar("ejecutoria", vigente.sub, vigente.fecha);
+    if (anterior?.clave === "archivo") return armar("archivo", anterior.sub, vigente.fecha, anterior.base);
+    if (anterior?.clave === "ejecucion") return armar("ejecucion", anterior.sub, anterior.fecha, anterior.base);
+    return armar("ejecutoria", vigente.sub, vigente.fecha, vigente.base);
   }
 
   if (vigente.clave === "citacion" && vigente.sub.startsWith("04.1")) {
     // Si en todo el historial hubo deprecatorio, la citacion se hace por deprecatorio.
     if (hitos.some((h) => h.base.includes("DEPRECATORIO") || h.base.includes("DEPRECAD"))) {
-      return armar("citacion", "04.3. Cita. - Deprecatorio", vigente.fecha);
+      return armar("citacion", "04.3. Cita. - Deprecatorio", vigente.fecha, vigente.base);
     }
   }
 
@@ -194,8 +204,8 @@ export function clasificarEtapaPorHitos(actuaciones: any[]): ClasificacionConFec
       const base = sinAcentos(String(a?.tipo ?? "")).split(" (")[0].trim();
       return base.startsWith("OFICIO") && (fechaDe(a) ?? "") >= (vigente.fecha ?? "9");
     });
-    if (oficiado) return armar("citacion", "04.1. Cita. - Ofi. Citaciones", vigente.fecha);
+    if (oficiado) return armar("citacion", "04.1. Cita. - Ofi. Citaciones", vigente.fecha, vigente.base);
   }
 
-  return armar(vigente.clave, vigente.sub, vigente.fecha);
+  return armar(vigente.clave, vigente.sub, vigente.fecha, vigente.base);
 }
