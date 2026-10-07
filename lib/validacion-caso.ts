@@ -5,6 +5,7 @@ import {
   calcularAlertaAbandonoProcesal,
   detectorSentenciaLegal,
 } from "./legal-analysis.js";
+import { sanitizarTipo } from "./etapa-por-hitos.js";
 import {
   compararEtapa,
   compararMedida,
@@ -50,6 +51,7 @@ export interface ResultadoCaso {
     medidaDetectada: boolean;
     tipoMedida: string;
     fechaInscripcion: string | null;
+    fechaEtapa: string | null;
     fechaUltimaActuacion: string;
   } | null;
   comparaciones: Record<string, Comparacion>;
@@ -88,7 +90,7 @@ export function resumirUltimas(actuaciones: any[], cuantas = 8): UltimaActuacion
     const texto = sinAcentos(`${a?.tipo ?? ""} ${a?.actividad ?? a?.nombreActuacion ?? ""}`);
     return {
       fecha: soloFecha(a?.fecha ?? a?.fechaProvidencia),
-      tipo: String(a?.tipo ?? "").slice(0, 70),
+      tipo: sanitizarTipo(String(a?.tipo ?? "")).slice(0, 70),
       claves: PALABRAS_CLAVE.filter((p) => texto.includes(p)),
     };
   });
@@ -109,7 +111,7 @@ export function resumirIncidentes(data: any): ResumenIncidente[] {
       judicatura: String(inc?.nombreJudicatura ?? ""),
       total: acts.length,
       primeraFecha: soloFecha(ordenadas[0]?.fecha),
-      tipos: ordenadas.slice(0, 3).map((a) => String(a?.tipo ?? "").slice(0, 60)),
+      tipos: ordenadas.slice(0, 3).map((a) => sanitizarTipo(String(a?.tipo ?? "")).slice(0, 60)),
     };
   });
 }
@@ -145,6 +147,7 @@ export function evaluarCaso(esperado: Esperado, data: any, hoy: Date): Resultado
     medidaDetectada: medida.medidaDetectada,
     tipoMedida: medida.tipoMedida,
     fechaInscripcion: medida.fechaInscripcion,
+    fechaEtapa: etapa.fechaEtapa ?? null,
     fechaUltimaActuacion: abandono.fechaUltimaActuacion,
   };
 
@@ -159,6 +162,7 @@ export function evaluarCaso(esperado: Esperado, data: any, hoy: Date): Resultado
       etapa: compararEtapa(esperado.etapa, calculado.etapaEspecifica),
       medida: compararMedida(esperado.medida, calculado.medidaDetectada, calculado.tipoMedida),
       fechaInscripcion: compararFecha(esperado.fechaInscripcion, calculado.fechaInscripcion),
+      fechaEtapa: compararFecha(esperado.fechaEtapa, calculado.fechaEtapa),
       controlAbandono: compararControlAbandono(esperado.controlAbandono, calculado.fechaUltimaActuacion, hoy),
     },
     incidentes,

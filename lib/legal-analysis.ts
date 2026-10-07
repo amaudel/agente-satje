@@ -64,6 +64,8 @@ export function normalizarNumeroCausa(raw: string): string {
   return raw.trim();
 }
 
+import { clasificarEtapaPorHitos } from "./etapa-por-hitos.js";
+
 export function extraerTodasLasActuaciones(data: any): any[] {
   if (!data) return [];
   if (Array.isArray(data)) return data;
@@ -133,6 +135,8 @@ export interface ClasificacionEtapa {
   etapaEspecifica: string;
   codigoEtapa: string;
   explicacion: string;
+  // Fecha del hito que define la etapa (solo la calcula el clasificador por hitos).
+  fechaEtapa?: string | null;
 }
 
 export function clasificarEtapaProcesal(actuaciones: any[]): ClasificacionEtapa {
@@ -144,6 +148,11 @@ export function clasificarEtapaProcesal(actuaciones: any[]): ClasificacionEtapa 
       explicacion: "No hay actuaciones registradas para clasificar la etapa procesal.",
     };
   }
+
+  // Primero por el ultimo hito sustantivo (tipo de actuacion); si no hay ninguno
+  // reconocible, decide el analisis por texto de abajo.
+  const porHitos = clasificarEtapaPorHitos(actuaciones);
+  if (porHitos) return porHitos;
 
   const textoCompletoExpediente = JSON.stringify(actuaciones).toLowerCase();
 

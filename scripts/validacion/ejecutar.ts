@@ -43,6 +43,7 @@ if (!API_KEY) {
 const ETIQUETAS: Record<string, string> = {
   etapaGeneral: "Etapa procesal general",
   etapa: "Etapa procesal (especifica)",
+  fechaEtapa: "Fecha de la etapa",
   medida: "Medida cautelar",
   fechaInscripcion: "Fecha inscripcion de la medida",
   // "Control de abandono", "Prioridad" y "ACT" no se miden: en la bitacora son
