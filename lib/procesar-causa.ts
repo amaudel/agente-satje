@@ -48,6 +48,9 @@ export async function procesarCausaIndividual(
 
   let actuaciones: any[] = [];
   const intentosBackend: { etapa: string; ok: boolean; detalle: string }[] = [];
+  // Errores parciales que el backend declara aunque responda 200 (p. ej. SATJE
+  // se agoto de tiempo en un incidente): sin ellos faltan actuaciones.
+  const erroresParciales: { code: string; stage?: string; retryable?: boolean }[] = [];
 
   // Cada intento queda acotado por el timeout del paso Y por el presupuesto
   // total de la causa: nunca puede colgarse indefinidamente.
@@ -69,6 +72,12 @@ export async function procesarCausaIndividual(
         return null;
       }
       const datos: any = await res.json();
+      for (const e of Array.isArray(datos?.partialErrors) ? datos.partialErrors : []) {
+        const code = String(e?.code ?? "ERROR_PARCIAL");
+        if (!erroresParciales.some((x) => x.code === code && x.stage === e?.stage)) {
+          erroresParciales.push({ code, stage: e?.stage, retryable: e?.retryable });
+        }
+      }
       const extraidas = extraerTodasLasActuaciones(datos);
       intentosBackend.push({ etapa, ok: true, detalle: `HTTP ${res.status}` });
       return extraidas;
@@ -158,6 +167,8 @@ export async function procesarCausaIndividual(
   return {
     causa: causaFormateada,
     backendError,
+    datosIncompletos: erroresParciales.length > 0,
+    erroresParciales,
     etapaProcesalGeneral: clasificacionEtapa.etapaGeneral,
     etapaProcesalEspecifica: clasificacionEtapa.etapaEspecifica,
     poseeSentencia: analisisSentencia.poseeSentencia,

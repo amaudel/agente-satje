@@ -77,3 +77,18 @@ test("el lote supervisor muestra la columna Advertencia y las filas sin datos ll
   assert.ok(html.includes("new Array(10).join('<td></td>')"));
   for (const m of html.matchAll(/<script>([\s\S]*?)<\/script>/g)) assert.doesNotThrow(() => new Function(m[1]));
 });
+
+test("avisa en el panel cuando SATJE respondio incompleto", () => {
+  const html = generarDashboardHTML({
+    causa: "01333-2026-10304",
+    datos_incompletos: true,
+    errores_parciales: [{ code: "SATJE_TIMEOUT", retryable: true }],
+  });
+  assert.ok(html.includes('id="avisoIncompleto"'));
+  assert.ok(html.includes("SATJE no respondió completo"));
+});
+
+test("no muestra el aviso de informacion incompleta cuando la respuesta fue completa", () => {
+  const html = generarDashboardHTML({ causa: "01333-2026-10304", datos_incompletos: false });
+  assert.ok(!html.includes('id="avisoIncompleto"'));
+});

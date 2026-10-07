@@ -27,6 +27,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   // lo pedira sola al cargar (ver cargarResumenIA).
   const resumenPendiente = datos?.resumen_pendiente === true;
   const total = datos?.total_actuaciones || 0;
+  const datosIncompletos = datos?.datos_incompletos === true;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
   const actuaciones = datos?.actuaciones_recientes || [];
@@ -1010,6 +1011,15 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             ` : ''}
           </div>
           
+          ${datosIncompletos ? `
+          <div id="avisoIncompleto" class="kpi-card" style="grid-column: 1 / -1; border-left: 6px solid #f59e0b; background: rgba(245,158,11,0.08);">
+            <div class="kpi-tag" style="color:#f59e0b;">⚠️ INFORMACIÓN INCOMPLETA</div>
+            <p style="font-size:1rem; color:#e2e8f0; margin-top:0.4rem;">
+              SATJE no respondió completo para esta causa: pueden faltar actuaciones, así que la etapa y los demás datos podrían no ser los reales.
+              Vuelve a consultar en unos minutos; la segunda consulta suele traer el expediente completo.
+            </p>
+          </div>` : ''}
+
           <!-- PANEL DE CLASIFICACIÓN DE ETAPA PROCESAL -->
           <div class="kpi-card etapa-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">

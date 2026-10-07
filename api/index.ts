@@ -748,7 +748,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     };
 
     const tFaseVector = Date.now();
-    if (upstashUrl && upstashToken && !resultadoIndividual.backendError) {
+    if (upstashUrl && upstashToken && !resultadoIndividual.backendError && !resultadoIndividual.datosIncompletos) {
       vectorDbStatus.activo = true;
       // El resumen de IA aun no existe (se genera aparte), asi que el texto
       // indexado usa las ultimas actuaciones en su lugar.
@@ -859,6 +859,8 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       etapaProcesalEspecifica: resultadoIndividual.etapaProcesalEspecifica,
       codigoEtapaProcesal: resultadoIndividual.clasificacionEtapa.codigoEtapa,
       clasificacion_etapa: resultadoIndividual.clasificacionEtapa,
+      datos_incompletos: resultadoIndividual.datosIncompletos,
+      errores_parciales: resultadoIndividual.erroresParciales,
       medidaDetectada: resultadoIndividual.medidaDetectada,
       tipoMedida: resultadoIndividual.tipoMedida,
       institucionEjecutora: resultadoIndividual.cicloVidaMedida.institucionEjecutora,
