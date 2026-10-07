@@ -65,6 +65,11 @@ export function sanitizarTipo(tipo: string): string {
   return /^(RAZON|AUTO|RESOLUCION|DECRETO|OFICIO|ACTA|CONSTANCIA)\b/i.test(resto) ? t : `${t.slice(0, i)} (...)`;
 }
 
+// El auto que declara el abandono tiene un tipo que empieza por ABANDONO.
+export function esTipoAbandono(tipo: string): boolean {
+  return sinAcentos(tipo).trim().startsWith("ABANDONO");
+}
+
 function hitoDe(tipo: string): { clave: Clave; sub: string } | null {
   const base = sinAcentos(tipo).split(" (")[0].trim();
   if (!base) return null;

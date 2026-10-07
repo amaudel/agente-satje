@@ -593,3 +593,35 @@ describe("evaluarCompletitudBusqueda", () => {
     assert.equal(evaluarCompletitudBusqueda(null as any).incompleta, false);
   });
 });
+
+describe("abandono declarado detectado por el tipo de actuacion", () => {
+  const fecha = (d: string) => `${d}T10:00:00.000+00:00`;
+
+  test("el auto ABANDONO POR FALTA DE IMPULSO se reconoce aunque su texto no diga 'se declara el abandono'", () => {
+    const r = calcularAlertaAbandonoProcesal(
+      [
+        { fecha: fecha("2023-06-08"), tipo: "ABANDONO POR FALTA DE IMPULSO PROCESAL ART. 245 (AUTO INTERLOCUTORIO)", actividad: "VISTOS: por haber transcurrido mas de seis meses sin impulso" },
+        { fecha: fecha("2021-10-22"), tipo: "RAZON (RAZON)", actividad: "devolucion del deprecatorio" },
+      ],
+      false
+    );
+    assert.equal(r.nivel, "abandonada");
+    assert.equal(r.fechaReferencialAbandono, "2023-06-08");
+  });
+
+  test("tambien por falta de comparecencia (Art. 87)", () => {
+    const r = calcularAlertaAbandonoProcesal(
+      [{ fecha: fecha("2025-05-13"), tipo: "ABANDONO POR FALTA DE COMPARECENCIA ART. 87 (AUTO)", actividad: "" }],
+      false
+    );
+    assert.equal(r.nivel, "abandonada");
+  });
+
+  test("una peticion que solo menciona abandono NO cuenta como declarado", () => {
+    const r = calcularAlertaAbandonoProcesal(
+      [{ fecha: fecha("2025-05-13"), tipo: "ATENDER PETICION (AUTO DE SUSTANCIACION)", actividad: "se pide que se declare el abandono" }],
+      false
+    );
+    assert.notEqual(r.nivel, "abandonada");
+  });
+});

@@ -64,7 +64,7 @@ export function normalizarNumeroCausa(raw: string): string {
   return raw.trim();
 }
 
-import { clasificarEtapaPorHitos } from "./etapa-por-hitos.js";
+import { clasificarEtapaPorHitos, esTipoAbandono } from "./etapa-por-hitos.js";
 
 export function extraerTodasLasActuaciones(data: any): any[] {
   if (!data) return [];
@@ -550,7 +550,13 @@ function esImpulsoProcesalReal(act: any): boolean {
 const FRASE_DECLARATORIA_ABANDONO = "se declara el abandono";
 
 function actuacionQueDeclaraAbandono(actuaciones: any[]): any | undefined {
-  return actuaciones?.find((act) => String(act.actividad || "").toLowerCase().includes(FRASE_DECLARATORIA_ABANDONO));
+  // Se reconoce por el TIPO de la actuacion (ABANDONO POR FALTA DE IMPULSO,
+  // ABANDONO POR FALTA DE COMPARECENCIA...), que SATJE usa siempre en el auto que
+  // lo declara, o por la frase formulaica en el texto. Una peticion que solo
+  // menciona "abandono" no cuenta.
+  return actuaciones?.find(
+    (act) => esTipoAbandono(String(act.tipo || "")) || String(act.actividad || "").toLowerCase().includes(FRASE_DECLARATORIA_ABANDONO)
+  );
 }
 
 // MOTOR DE ALERTA PREVENTIVA DE ABANDONO PROCESAL (COGEP ART. 245, 246, 247)
