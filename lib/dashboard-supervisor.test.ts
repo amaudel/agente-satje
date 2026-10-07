@@ -266,3 +266,85 @@ test("reinicio: con candidatos y busqueda incompleta muestra ambos", async () =>
   assert.ok(out.includes("01333-2026-10304"));
   assert.ok(out.includes("incompleta"));
 });
+
+// ---- Consulta por cedula: cadena de juicios de cobro de la cooperativa.
+
+const procesoCedula = (numero: string, accion: string, fecha: string, roles = ["demandado"]) => ({
+  idJuicio: numero,
+  numeroProceso: numero,
+  accion,
+  fechaIngreso: `${fecha}T10:00:00.000+00:00`,
+  estadoActual: "A",
+  rolesEncontrados: roles,
+  esCobro: /COBRO/.test(accion),
+});
+
+async function consultarCedula(procesos: any[], estados: Record<string, any>) {
+  const llamadas: string[] = [];
+  const { sandbox, el } = crearEntorno(async (url: string, init: any) => {
+    llamadas.push(url);
+    if (url.includes("buscar-cedula")) {
+      return { ok: true, json: async () => ({ ok: true, cedula: "0000000000", total: procesos.length, aviso: null, procesos }) };
+    }
+    const causa = JSON.parse(init.body).causa;
+    const e = estados[causa];
+    return { ok: true, json: async () => (e ? { ok: true, numeroProceso: causa, ...e } : { ok: false, error: "No se pudo consultar" }) };
+  });
+  el("inputSearchCedula").value = "0000000000";
+  sandbox.buscarProcesosPorCedula();
+  for (let i = 0; i < 60; i++) await new Promise((r) => setTimeout(r, 5));
+  return { html: el("cedulaResultados").innerHTML as string, llamadas };
+}
+
+const CASO = [
+  procesoCedula("07283201905415G", "ARCHIVO DE LA INVESTIGACIÓN PREVIA ART. 586", "2019-07-05", ["actor"]),
+  procesoCedula("07283201606140G", "CONSTANCIA DE PERDIDA DE DOCUMENTOS", "2016-05-02", ["actor"]),
+  procesoCedula("01333202610304", "COBRO DE PAGARÉ A LA ORDEN", "2026-08-31"),
+  procesoCedula("01333202104334", "COBRO DE PAGARÉ A LA ORDEN", "2021-06-11"),
+  procesoCedula("07333202100117", "COBRO DE PAGARÉ A LA ORDEN", "2021-01-20"),
+];
+
+const ESTADOS: Record<string, any> = {
+  "01333202104334": { etapaGeneral: "12. ARCHIVADO", etapaEspecifica: "12.3. Arch. - Por abandono", nivelAbandono: "abandonada", fechaAbandono: "2022-10-20", demandanteErco: true },
+  "01333202610304": { etapaGeneral: "04. CITACIÓN", etapaEspecifica: "04.3. Cita. - Deprecatorio", nivelAbandono: "normal", fechaAbandono: null, demandanteErco: true },
+  "07333202100117": { etapaGeneral: "04. CITACIÓN", etapaEspecifica: "04.1. Cita. - Ofi. Citaciones", nivelAbandono: "normal", fechaAbandono: null, demandanteErco: false },
+};
+
+test("cedula: muestra la cadena de cobros y dice cual es el juicio actual y cual el abandonado", async () => {
+  const { html, llamadas } = await consultarCedula(CASO, ESTADOS);
+  assert.ok(html.includes("JUICIOS DE COBRO"));
+  // solo se consulta el estado de los cobros donde es demandado (no las causas penales)
+  const estadoCalls = llamadas.filter((u) => u.includes("estado-causa"));
+  assert.equal(estadoCalls.length, 3);
+  const resumen = html.slice(html.indexOf('id="cadenaResumen"'));
+  assert.match(resumen, /Juicio actual:[^<]*<[^>]*>[^<]*01333202610304/);
+  assert.ok(html.includes("ABANDONADO"), "marca el abandonado");
+  assert.ok(html.includes("2022-10-20"));
+  assert.match(resumen, /abandonado[^]*01333202104334/i);
+});
+
+test("cedula: un cobro donde Erco no aparece como demandante no cuenta como el actual", async () => {
+  const { html } = await consultarCedula(CASO, ESTADOS);
+  assert.ok(html.includes("Otro demandante"));
+  const resumen = html.slice(html.indexOf('id="cadenaResumen"'), html.indexOf("</div>", html.indexOf('id="cadenaResumen"')));
+  assert.ok(!resumen.includes("07333202100117"), "el cobro de otro demandante no entra en el resumen");
+});
+
+test("cedula: las causas que no son cobro quedan en la lista completa, no en la cadena", async () => {
+  const { html } = await consultarCedula(CASO, ESTADOS);
+  const cadena = html.slice(html.indexOf("JUICIOS DE COBRO"), html.indexOf("Todos los procesos"));
+  assert.ok(!cadena.includes("07283201905415G"));
+  assert.ok(html.slice(html.indexOf("Todos los procesos")).includes("07283201905415G"));
+});
+
+test("cedula: sin cobros como demandado no se muestra la cadena", async () => {
+  const { html } = await consultarCedula([CASO[0], CASO[1]], {});
+  assert.ok(!html.includes("JUICIOS DE COBRO"));
+  assert.ok(html.includes("07283201905415G"));
+});
+
+test("cedula: si falla la consulta de un juicio lo dice y no inventa estado", async () => {
+  const { html } = await consultarCedula([CASO[3]], {});
+  assert.ok(html.includes("No se pudo consultar"));
+  assert.ok(!html.includes("ABANDONADO"));
+});

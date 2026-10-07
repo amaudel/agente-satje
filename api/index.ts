@@ -20,6 +20,7 @@ import {
   safeCompare,
   generarLoginHTML,
 } from "../lib/auth.js";
+import { esAccionDeCobro, esDemandanteErco } from "../lib/cadena-cobro.js";
 import { consultarLimite, registrarFallo, limpiarLimite, ipDelCliente } from "../lib/rate-limit.js";
 import { mapConcurrente } from "../lib/concurrencia.js";
 import { CHAT_TOOLS, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
@@ -583,6 +584,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         fechaIngreso: c?.fechaIngreso || null,
         estadoActual: c?.estadoActual || null,
         rolesEncontrados: Array.isArray(c?.rolesEncontrados) ? c.rolesEncontrados : [],
+        esCobro: esAccionDeCobro(c?.accion),
       }));
 
       return res.status(200).json({
@@ -597,6 +599,38 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
             : "Una de las dos busquedas (actor/demandado) no respondio, asi que la lista puede estar incompleta. Reintenta en unos minutos.",
         procesos,
       });
+    }
+
+    // 2d. ESTADO DE UNA CAUSA (liviano), para armar la cadena de juicios de cobro
+    // de una cedula: etapa, si esta abandonada/archivada y si la cooperativa
+    // (Erco) figura como demandante en el expediente.
+    if (req.query.action === "estado-causa" || bodyData.action === "estado-causa") {
+      const causaEstado = String(bodyData.causa || req.query.causa || "").trim();
+      if (!causaEstado) return res.status(400).json({ ok: false, error: "Falta la causa." });
+      const baseUrlEstado = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKeyEstado = process.env.SATJE_API_KEY;
+      if (!apiKeyEstado) return res.status(500).json({ ok: false, error: "SATJE_API_KEY no esta configurado en el servidor." });
+      try {
+        const r = await procesarCausaIndividual(causaEstado, baseUrlEstado, apiKeyEstado);
+        if (r.backendError) {
+          return res.status(502).json({ ok: false, error: `No se pudo consultar SATJE (${r.backendError}).` });
+        }
+        const abandono = r.alertaAbandonoObjeto;
+        return res.status(200).json({
+          ok: true,
+          numeroProceso: r.causa,
+          etapaGeneral: r.etapaProcesalGeneral,
+          etapaEspecifica: r.etapaProcesalEspecifica,
+          fechaEtapa: r.clasificacionEtapa?.fechaEtapa ?? null,
+          nivelAbandono: abandono?.nivel ?? null,
+          fechaAbandono: abandono?.nivel === "abandonada" ? abandono.fechaReferencialAbandono : null,
+          totalActuaciones: r.totalActuaciones,
+          demandanteErco: esDemandanteErco(r.actuaciones),
+          datosIncompletos: r.datosIncompletos,
+        });
+      } catch (errEstado: any) {
+        return res.status(500).json({ ok: false, error: errEstado?.message || String(errEstado) });
+      }
     }
 
     // 2e. RESUMEN EJECUTIVO CON IA (2e). Se pide por separado para no

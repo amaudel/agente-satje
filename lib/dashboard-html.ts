@@ -541,11 +541,111 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         });
 
         html += '</tbody></table></div></div>';
-        out.innerHTML = html;
+
+        // Cadena de juicios de cobro de la cooperativa: de todo lo que SATJE
+        // devuelve por la cedula (causas penales, constancias, demandas de otros
+        // acreedores) solo interesan los cobros donde la persona es demandada.
+        var cands = candidatosCadenaCobro(procesos);
+        var tablaHtml = '<details' + (cands.length ? '' : ' open') + ' style="margin-top:1rem;">' +
+          '<summary style="cursor:pointer; color:var(--text-muted); font-weight:700;">Todos los procesos de esta cédula (' + procesos.length + ')</summary>' +
+          html + '</details>';
+        if (cands.length === 0) {
+          out.innerHTML = tablaHtml;
+          return;
+        }
+        return window.cargarCadenaCobro(cands, out, tablaHtml);
       })
       .catch(function(err) {
         out.innerHTML = '<div class="card" style="padding:1.5rem; color:var(--danger);">⚠️ Error de conexión: ' + esc(err.message) + '</div>';
       });
+    };
+
+    var CONCURRENCIA_CADENA = 2;
+
+    function candidatosCadenaCobro(procesos) {
+      return (procesos || []).filter(function(p) {
+        return p.esCobro && (p.rolesEncontrados || []).indexOf('demandado') !== -1;
+      }).sort(function(a, b) {
+        return String(a.fechaIngreso || '').localeCompare(String(b.fechaIngreso || ''));
+      });
+    }
+
+    function juicioCerrado(e) {
+      return e.nivelAbandono === 'abandonada' || /^12/.test(e.etapaGeneral || '');
+    }
+
+    function htmlFilaCadena(p, e) {
+      var numero = p.numeroProceso || p.idJuicio || '';
+      var fecha = (p.fechaIngreso || '').split('T')[0] || 'N/D';
+      var estado = '⏳ Consultando…';
+      var demandante = '';
+      if (e && e.error) {
+        estado = '⚠️ No se pudo consultar (' + esc(e.error) + ')';
+      } else if (e) {
+        if (e.nivelAbandono === 'abandonada') {
+          estado = '🔴 <strong>ABANDONADO</strong> el ' + esc(e.fechaAbandono);
+        } else if (juicioCerrado(e)) {
+          estado = '⚫ <strong>ARCHIVADO</strong> — ' + esc(e.etapaEspecifica);
+        } else {
+          estado = '🟢 <strong>VIGENTE</strong> — ' + esc(e.etapaGeneral) + ' · ' + esc(e.etapaEspecifica);
+        }
+        if (e.datosIncompletos) estado += ' <span style="color:var(--warning);">⚠️ datos incompletos</span>';
+        demandante = e.demandanteErco === true ? '✅ Erco' : (e.demandanteErco === false ? '⚠️ Otro demandante' : '❔ No confirmado');
+      }
+      return '<tr><td><a href="/?causa=' + encodeURIComponent(numero) + '" class="btn-detalle chip-link">' + esc(numero) + '</a></td>' +
+        '<td>' + esc(fecha) + '</td><td>' + estado + '</td><td>' + demandante + '</td></tr>';
+    }
+
+    function htmlResumenCadena(cands, estados) {
+      var actual = null;
+      var cerrados = [];
+      var pendientes = 0;
+      cands.forEach(function(p) {
+        var e = estados[p.numeroProceso || p.idJuicio];
+        if (!e) { pendientes++; return; }
+        if (e.error || e.demandanteErco === false) return;
+        if (juicioCerrado(e)) cerrados.push(p); else actual = p;
+      });
+      function enlace(p) {
+        var n = p.numeroProceso || p.idJuicio || '';
+        return '<a href="/?causa=' + encodeURIComponent(n) + '" style="color:var(--accent); font-weight:800;">' + esc(n) + '</a>';
+      }
+      return '<div id="cadenaResumen" style="padding:0.7rem 0.9rem; font-size:0.95rem; color:#e2e8f0;">' +
+        '<span>Juicio actual: ' + (actual ? enlace(actual) : (pendientes ? '⏳ consultando…' : '<strong>ninguno vigente</strong>')) + '</span> &nbsp;·&nbsp; ' +
+        '<span>Juicio(s) abandonado(s) o archivado(s): ' + (cerrados.length ? cerrados.map(enlace).join(', ') : (pendientes ? '⏳' : 'ninguno')) + '</span></div>';
+    }
+
+    // Consulta el estado de cada cobro (2 a la vez: el backend atiende 2 llamadas
+    // a SATJE en paralelo) y repinta a medida que llegan.
+    window.cargarCadenaCobro = function(cands, out, tablaHtml) {
+      var estados = {};
+      function pintar() {
+        out.innerHTML = '<div class="batch-card">' +
+          '<div class="batch-header"><div class="batch-title">⚖️ JUICIOS DE COBRO DE LA COOPERATIVA (' + cands.length + ')</div></div>' +
+          htmlResumenCadena(cands, estados) +
+          '<div class="table-container"><table class="batch-table"><thead><tr><th>N° Proceso</th><th>Ingreso</th><th>Estado del juicio</th><th>Demandante</th></tr></thead><tbody>' +
+          cands.map(function(p) { return htmlFilaCadena(p, estados[p.numeroProceso || p.idJuicio]); }).join('') +
+          '</tbody></table></div></div>' + tablaHtml;
+      }
+      pintar();
+      var i = 0;
+      function siguiente() {
+        if (i >= cands.length) return Promise.resolve();
+        var p = cands[i++];
+        var clave = p.numeroProceso || p.idJuicio;
+        return fetch('/?action=estado-causa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'estado-causa', causa: clave })
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(res) { estados[clave] = res && res.ok ? res : { error: (res && res.error) || 'sin respuesta' }; })
+        .catch(function(err) { estados[clave] = { error: err.message }; })
+        .then(function() { pintar(); return siguiente(); });
+      }
+      var trabajadores = [];
+      for (var n = 0; n < CONCURRENCIA_CADENA; n++) trabajadores.push(siguiente());
+      return Promise.all(trabajadores);
     };
 
     window.exportarCSVTabla = function(tableId, nombreArchivo) {
