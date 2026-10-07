@@ -359,6 +359,9 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         const causasCedula = Array.isArray(buscarData?.data) ? buscarData.data : [];
 
         const candidatos = filtrarCandidatosReinicio(causasCedula, asunto, alerta.fechaReferencialAbandono, idJuicioActual);
+        // SATJE a veces responde a medias (p. ej. falla la busqueda como
+        // demandado): sin este aviso "no se encontraron" parece definitivo.
+        const completitud = evaluarCompletitudBusqueda(buscarData);
 
         return res.status(200).json({
           ok: true,
@@ -366,6 +369,8 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           fechaAbandono: alerta.fechaReferencialAbandono,
           totalCausasCedula: causasCedula.length,
           candidatos,
+          busquedaIncompleta: completitud.incompleta,
+          advertenciaBusqueda: completitud.motivos.join("; "),
         });
       } catch (errReinicio: any) {
         return res.status(500).json({ ok: false, error: errReinicio?.message || String(errReinicio) });

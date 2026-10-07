@@ -256,11 +256,18 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           out.innerHTML = '⚠️ ' + (esc(res.error) || 'No se pudo completar la búsqueda.');
           return;
         }
+        var avisoIncompleta = res.busquedaIncompleta
+          ? '<div style="margin-bottom:0.5rem; padding:0.5rem 0.7rem; border-left:4px solid #f59e0b; background:rgba(245,158,11,0.08); color:#fcd34d;">⚠️ La búsqueda por cédula quedó <strong>incompleta</strong>' + (res.advertenciaBusqueda ? ' (' + esc(res.advertenciaBusqueda) + ')' : '') + '. Puede haber causas que SATJE no devolvió. Vuelve a intentar en unos minutos.</div>'
+          : '';
         if (!res.candidatos || res.candidatos.length === 0) {
-          out.innerHTML = '<div style="color:var(--text-muted);">Asunto detectado: <strong>' + esc(res.asuntoDetectado) + '</strong>. No se encontraron causas nuevas con ese mismo asunto para esta cédula (de un total de ' + esc(res.totalCausasCedula) + ' causas revisadas).</div>';
+          if (res.busquedaIncompleta) {
+            out.innerHTML = avisoIncompleta + '<div style="color:var(--text-muted);">Asunto detectado: <strong>' + esc(res.asuntoDetectado) + '</strong>. Con lo que SATJE devolvió (' + esc(res.totalCausasCedula) + ' causas) no hay candidatas, pero <strong>eso no descarta un reinicio</strong>.</div>';
+          } else {
+            out.innerHTML = '<div style="color:var(--text-muted);">Asunto detectado: <strong>' + esc(res.asuntoDetectado) + '</strong>. No se encontraron causas nuevas con ese mismo asunto para esta cédula (de un total de ' + esc(res.totalCausasCedula) + ' causas revisadas).</div>';
+          }
           return;
         }
-        var html = '<div style="color:#e2e8f0; margin-bottom:0.5rem;">Asunto detectado: <strong>' + esc(res.asuntoDetectado) + '</strong>. ' + res.candidatos.length + ' causa(s) candidata(s):</div>';
+        var html = avisoIncompleta + '<div style="color:#e2e8f0; margin-bottom:0.5rem;">Asunto detectado: <strong>' + esc(res.asuntoDetectado) + '</strong>. ' + res.candidatos.length + ' causa(s) candidata(s):</div>';
         res.candidatos.forEach(function(c) {
           html += '<div style="padding:0.5rem 0.7rem; background:rgba(56,189,248,0.08); border:1px solid rgba(56,189,248,0.25); border-radius:0.4rem; margin-bottom:0.4rem;">' +
             '<a href="/?causa=' + encodeURIComponent(c.numeroProceso) + '" style="color:var(--accent); font-weight:800; text-decoration:none;">' + esc(c.numeroProceso) + '</a>' +

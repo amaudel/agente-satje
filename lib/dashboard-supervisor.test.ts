@@ -223,3 +223,46 @@ test("sin nombre de judicatura se muestra su codigo (primeros 5 caracteres del p
   assert.ok(tabla.includes("UNIDAD JUDICIAL CIVIL CUENCA"), "si SATJE da el nombre, se usa");
   assert.equal((tabla.match(/Cód\./g) || []).length, 2, "solo las dos sin nombre muestran codigo");
 });
+
+// ---- Buscador de reinicio: no debe afirmar "no hay" cuando la busqueda quedo a medias.
+
+async function buscarReinicio(respuesta: any) {
+  const { sandbox, el } = crearEntorno(async () => ({ ok: true, json: async () => respuesta }));
+  el("reinicioCedulaInput").value = "0000000000";
+  sandbox.buscarReinicioAbandono();
+  for (let i = 0; i < 20; i++) await new Promise((r) => setTimeout(r, 5));
+  return el("reinicioResultados").innerHTML as string;
+}
+
+test("reinicio: busqueda completa sin candidatos dice que no se encontraron", async () => {
+  const out = await buscarReinicio({ ok: true, asuntoDetectado: "COBRO DE PAGARE A LA ORDEN", totalCausasCedula: 3, candidatos: [], busquedaIncompleta: false });
+  assert.ok(out.includes("No se encontraron causas nuevas"));
+  assert.ok(!out.includes("incompleta"));
+});
+
+test("reinicio: busqueda incompleta sin candidatos NO afirma que no hay reinicio", async () => {
+  const out = await buscarReinicio({
+    ok: true,
+    asuntoDetectado: "COBRO DE PAGARE A LA ORDEN",
+    totalCausasCedula: 3,
+    candidatos: [],
+    busquedaIncompleta: true,
+    advertenciaBusqueda: "fallo la busqueda como demandado (SATJE_TIMEOUT)",
+  });
+  assert.ok(out.includes("incompleta"));
+  assert.ok(out.includes("demandado"), "debe decir que parte fallo");
+  assert.ok(!out.includes("No se encontraron causas nuevas"));
+});
+
+test("reinicio: con candidatos y busqueda incompleta muestra ambos", async () => {
+  const out = await buscarReinicio({
+    ok: true,
+    asuntoDetectado: "COBRO DE PAGARE A LA ORDEN",
+    totalCausasCedula: 3,
+    candidatos: [{ numeroProceso: "01333-2026-10304", fechaIngreso: "2026-09-09", judicatura: "CUENCA" }],
+    busquedaIncompleta: true,
+    advertenciaBusqueda: "SATJE no respondio por completo",
+  });
+  assert.ok(out.includes("01333-2026-10304"));
+  assert.ok(out.includes("incompleta"));
+});
