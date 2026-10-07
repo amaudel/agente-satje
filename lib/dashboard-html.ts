@@ -34,6 +34,9 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
   const actuaciones = datos?.actuaciones_recientes || [];
   const vectorDbStatus = datos?.vector_db_status || { activo: false, precedentes: [] };
+  // La indexacion en Upstash sigue ocurriendo por detras (la usa el chat); la
+  // tarjeta es informacion tecnica y solo se muestra si se pide expresamente.
+  const mostrarPanelRag = datos?.mostrar_panel_rag === true;
 
   const poseeSentencia = datos?.analisis_dashboard?.posee_sentencia ?? false;
   const fechaSentencia = datos?.analisis_dashboard?.fecha_sentencia || null;
@@ -1128,7 +1131,8 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         <!-- RESULTADOS INDIVIDUALES -->
         <div class="kpi-grid">
 
-          <!-- PANEL UPSTASH VECTOR DB & CACHÉ RAG -->
+          ${mostrarPanelRag ? `
+          <!-- PANEL UPSTASH VECTOR DB & CACHÉ RAG (tecnico: oculto por defecto) -->
           <div class="kpi-card vector-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
               <div class="kpi-tag success">⚡ UPSTASH VECTOR DB — RAG & PRECEDENTES</div>
@@ -1157,7 +1161,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
                 `).join('')}
               </div>
             ` : ''}
-          </div>
+          </div>` : ''}
           
           ${datosIncompletos ? `
           <div id="avisoIncompleto" class="kpi-card" style="grid-column: 1 / -1; border-left: 6px solid #f59e0b; background: rgba(245,158,11,0.08);">

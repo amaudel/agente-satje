@@ -122,3 +122,14 @@ test("si no se pudo determinar la fecha de la etapa lo dice en vez de inventarla
   const tarjeta = html.slice(html.indexOf("CLASIFICACIÓN DE ETAPA PROCESAL"), html.indexOf("CLASIFICACIÓN DE ETAPA PROCESAL") + 2500);
   assert.ok(tarjeta.includes("No determinada"));
 });
+
+test("la tarjeta tecnica de Upstash / RAG no se muestra al usuario", () => {
+  const html = generarDashboardHTML({
+    causa: "01333-2026-10304",
+    total_actuaciones: 10,
+    vector_db_status: { activo: true, precedentes: [{ id: "x", score: 0.9, metadata: { causa: "01333-2021-04334", etapa: "12" } }] },
+  });
+  assert.ok(!html.includes("UPSTASH VECTOR DB"));
+  assert.ok(!html.includes("RAG VECTORIAL CONECTADO"));
+  assert.ok(!html.includes("Precedentes / Causas Semánticamente Similares"));
+});
