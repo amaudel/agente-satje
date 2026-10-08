@@ -397,6 +397,9 @@ async def _procesar(mensaje: Any, request: Request, clave: str) -> dict[str, Any
             resultado = _resultado("La consulta tardó demasiado. SATJE puede estar lento: vuelva a intentarlo.", True)
         except httpx.HTTPError as exc:
             resultado = _resultado(f"Error interno al consultar el servicio ({type(exc).__name__}).", True)
+        except Exception as exc:  # noqa: BLE001 - nunca debe escapar como un 500 sin explicacion
+            logger.exception("mcp tools/call %s fallo", nombre)
+            resultado = _resultado(f"Error interno del servidor MCP ({type(exc).__name__}). Revise el registro del servicio.", True)
         return {"jsonrpc": "2.0", "id": id_, "result": resultado}
     return _error(id_, -32601, f"Método no soportado: {str(metodo)[:60]}")
 

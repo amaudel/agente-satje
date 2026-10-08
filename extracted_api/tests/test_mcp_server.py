@@ -314,3 +314,23 @@ def test_nunca_llega_a_las_rutas_operativas(contexto):
     cliente, registro = contexto
     rpc(cliente, "tools/call", {"name": "consultarMedidasCautelares", "arguments": {"idJuicio": "../ops/metrics"}})
     assert not any("/ops/" in x[1] for x in registro)
+
+
+# ---------------------------------------------------------------- errores inesperados
+
+
+def test_un_fallo_inesperado_se_informa_como_error_de_herramienta_y_no_como_500(contexto, monkeypatch):
+    import app.mcp_server as mcp
+
+    async def roto(*args, **kwargs):
+        raise RuntimeError("fallo interno con datos sensibles: clave-de-prueba")
+
+    monkeypatch.setattr(mcp, "_ejecutar", roto)
+    cliente, _ = contexto
+    r = rpc(cliente, "tools/call", {"name": "consultarMedidasCautelares", "arguments": {"idJuicio": ID_REAL}})
+    assert r.status_code == 200
+    resultado = r.json()["result"]
+    assert resultado["isError"] is True
+    texto = resultado["content"][0]["text"]
+    assert "RuntimeError" in texto  # dice de que tipo fue, para poder diagnosticar
+    assert "clave-de-prueba" not in texto and "datos sensibles" not in texto  # pero no filtra el mensaje

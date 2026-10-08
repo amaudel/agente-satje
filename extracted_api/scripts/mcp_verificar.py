@@ -37,7 +37,11 @@ def llamar(metodo: str, ruta: str, cuerpo=None, clave: str | None = CLAVE, timeo
         return 0, f"{type(e).__name__}"
 
 
+ULTIMA_RESPUESTA_NO_JSON = ""
+
+
 def rpc(metodo: str, params=None, id_=1, clave: str | None = CLAVE):
+    global ULTIMA_RESPUESTA_NO_JSON
     cuerpo = {"jsonrpc": "2.0", "id": id_, "method": metodo}
     if params is not None:
         cuerpo["params"] = params
@@ -45,6 +49,7 @@ def rpc(metodo: str, params=None, id_=1, clave: str | None = CLAVE):
     try:
         return estado, json.loads(texto) if texto else None
     except ValueError:
+        ULTIMA_RESPUESTA_NO_JSON = f"HTTP {estado}, respuesta no JSON: {texto[:120]!r}"
         return estado, None
 
 
@@ -67,7 +72,7 @@ def forma(valor, profundidad=0):
 def resultado_de(herramienta: str, argumentos: dict):
     estado, cuerpo = rpc("tools/call", {"name": herramienta, "arguments": argumentos}, id_=9)
     if not cuerpo or "result" not in cuerpo:
-        return estado, None, False, (cuerpo or {}).get("error")
+        return estado, None, False, (cuerpo or {}).get("error") or ULTIMA_RESPUESTA_NO_JSON or f"HTTP {estado} sin respuesta"
     r = cuerpo["result"]
     texto = r["content"][0]["text"] if r.get("content") else ""
     try:
