@@ -296,17 +296,26 @@ async def _ejecutar(app: Any, nombre: str, spec: dict[str, Any], argumentos: dic
     ) as cliente:
         valores = dict(argumentos)
 
-        # Un número con guiones no es un idJuicio: se convierte con el resolver del servidor.
+        # Un número con guiones no es un idJuicio (la API REST responde 404 con guiones): se
+        # convierte con el resolver del servidor. Si el resolver no está disponible o falla,
+        # se usa el número sin separadores, que es el identificador que ya aceptan las demás
+        # rutas, y la propia consulta informa si el juicio no existe.
         if "idJuicio" in spec.get("ids", []):
             id_juicio = valores["idJuicio"]
             if not _ID_SIN_SEPARADORES.match(id_juicio):
+                resuelto_id = None
                 resuelto = await cliente.get(f"/api/v1/causas/resolver/{quote(id_juicio, safe='')}", headers=cabeceras)
-                if resuelto.status_code != 200:
-                    return _resultado(f"No se pudo resolver el número de proceso (HTTP {resuelto.status_code}): {_texto_de_respuesta(resuelto)[:1500]}", True)
-                try:
-                    valores["idJuicio"] = resuelto.json()["idJuicio"]
-                except (ValueError, KeyError, TypeError):
-                    return _resultado("El servicio de resolución no devolvió un idJuicio.", True)
+                if resuelto.status_code == 200:
+                    try:
+                        resuelto_id = resuelto.json()["idJuicio"]
+                    except (ValueError, KeyError, TypeError):
+                        resuelto_id = None
+                if not resuelto_id:
+                    logger.warning("mcp resolver no disponible (HTTP %s): se usa el número sin separadores", resuelto.status_code)
+                    resuelto_id = re.sub(r"[^A-Za-z0-9]", "", id_juicio)
+                if not resuelto_id:
+                    return _resultado("El identificador del juicio no tiene letras ni números.", True)
+                valores["idJuicio"] = resuelto_id
 
         ruta = spec["path"]
         for campo in re.findall(r"{(\w+)}", ruta):

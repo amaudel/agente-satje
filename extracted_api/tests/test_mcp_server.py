@@ -266,12 +266,23 @@ def test_un_id_sin_guiones_no_llama_al_resolver(contexto):
     assert [x[1] for x in registro] == [f"/api/v1/causas/{ID_REAL}/medidas-cautelares"]
 
 
-def test_si_el_resolver_no_encuentra_el_juicio_lo_informa_y_no_consulta_mas(contexto):
+def test_si_el_resolver_falla_se_usa_el_numero_sin_guiones_y_la_consulta_decide(contexto):
+    # El resolver del servidor puede estar caido o no existir: el identificador sin guiones es
+    # el que ya usan las demas rutas, asi que se consulta con el y se informa lo que responda.
     cliente, registro = contexto
     r = llamar(cliente, "consultarEstadoSentencia", {"idJuicio": "99999-2099-99999"})
+    assert [x[1] for x in registro] == [
+        "/api/v1/causas/resolver/99999-2099-99999",
+        "/api/v1/causas/99999209999999/sentencia/estado",
+    ]
+    assert r["result"]["isError"] is False  # la ruta de prueba responde bien con ese id
+
+
+def test_si_tras_el_respaldo_la_consulta_falla_el_error_es_el_de_la_consulta(contexto):
+    cliente, registro = contexto
+    r = llamar(cliente, "consultarEstadoSentencia", {"idJuicio": "000-"})
     assert r["result"]["isError"] is True
-    assert "404" in r["result"]["content"][0]["text"]
-    assert len(registro) == 1
+    assert "422" in r["result"]["content"][0]["text"]
 
 
 def test_resolver_numero_proceso_devuelve_el_identificador(contexto):
