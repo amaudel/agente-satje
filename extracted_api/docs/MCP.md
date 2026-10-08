@@ -100,30 +100,20 @@ Nginx limita `location /` a 30 peticiones por minuto por IP (ráfaga 20). Una se
 hace `initialize`, `tools/list` y las llamadas: si el cliente comparte IP con otros, puede
 recibir `429`/`503`. Si ocurre, conviene un `location = /mcp` con un límite propio más alto.
 
-## Conectar un cliente
-- URL: `https://api.asitentekairon.cloud/mcp` · transporte Streamable HTTP · solo `POST`.
-- Autenticación: clave de la API en `X-API-Key` o `Authorization: Bearer <clave>`.
+## Autenticación
+- **Con OAuth configurado** (`MCP_OAUTH_ISSUER`): solo se aceptan tokens de acceso OAuth válidos
+  (ver `MCP_OAUTH.md`). Es lo que exige ChatGPT, que no admite claves de API personalizadas.
+- **Sin OAuth configurado:** `X-API-Key` o `Authorization: Bearer <clave>` con la clave de la API.
+  Este modo existe solo mientras no se conecte el proveedor de identidad y **no sirve para ChatGPT**.
 
-Ejemplo de configuración para clientes que aceptan cabeceras (la clave va en una variable de
-entorno, no en el archivo):
-
-```json
-{
-  "mcpServers": {
-    "consulta-judicial-ecuador": {
-      "type": "http",
-      "url": "https://api.asitentekairon.cloud/mcp",
-      "headers": { "X-API-Key": "${CONSULTA_JUDICIAL_API_KEY}" }
-    }
-  }
-}
-```
-
-**No verificado:** qué métodos de autenticación acepta ChatGPT para un servidor MCP. No se probó
-contra ese cliente. Si solo admite OAuth o "sin autenticación", esta capa no sirve tal cual: haría
-falta un servidor OAuth o un proxy con autenticación propia. No se debe poner la clave en la URL.
-
-**No se usa el SDK oficial:** el protocolo (initialize, tools/list, tools/call, ping, lotes, 202 para
-notificaciones, 405 para GET) está implementado a mano para no agregar dependencias al entorno
-del servidor. Se probó con pruebas propias y con `scripts/mcp_verificar.py`, no con una suite de
-conformidad oficial.
+## Limitaciones conocidas
+- **Discrepancia de medidas cautelares (NO resuelta):** el detector del servidor (Python, en el MCP) y el del
+  panel (TypeScript) no coinciden. Para el juicio 01333-2024-12766 el MCP devolvió
+  `INSCRIPTION_NOT_CONFIRMED` mientras la oficial jurídica confirmó la inscripción el 17-12-2024 y el panel la
+  muestra. Las reglas de la oficial (inscripción = fecha de presentación del oficio del Registro) están solo en el
+  panel. Hasta unificarlas y probarlas, el resultado de `consultarMedidasCautelares` no es definitivo.
+- **No se usa el SDK oficial de MCP:** el protocolo está implementado a mano (initialize, tools/list, tools/call,
+  ping, lotes, 202 para notificaciones, 405 para GET). Se probó con pruebas propias y `scripts/mcp_verificar.py`,
+  no con una suite de conformidad oficial.
+- **ChatGPT no se ha probado** contra este servidor.
+- La equivalencia con/sin guiones en números de proceso se verificó con un solo juicio.

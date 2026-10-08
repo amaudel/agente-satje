@@ -17,6 +17,7 @@ import hmac
 import json
 import logging
 import re
+import unicodedata
 from typing import Any
 from urllib.parse import quote
 
@@ -25,10 +26,59 @@ from fastapi import APIRouter, Request, Response
 from fastapi.responses import JSONResponse
 
 from .config import settings
+from .mcp_oauth import AjustesOAuth, ErrorToken, VerificadorToken
 
 logger = logging.getLogger("mcp")
 
 router = APIRouter()
+
+# Autenticacion OAuth (ver mcp_oauth.py). Si no hay emisor configurado, el MCP conserva la
+# autenticacion por clave de la API (no apta para ChatGPT).
+ajustes = AjustesOAuth()
+_cache_verificador: dict[str, Any] = {}
+
+
+def _verificador() -> VerificadorToken:
+    if _cache_verificador.get("ajustes") is not ajustes:
+        _cache_verificador["ajustes"] = ajustes
+        _cache_verificador["verificador"] = VerificadorToken(ajustes)
+    return _cache_verificador["verificador"]
+
+
+def _desafio(error: str | None = None, descripcion: str | None = None) -> str:
+    """Cabecera WWW-Authenticate de la especificacion MCP: apunta a los metadatos del recurso."""
+    partes = [f'resource_metadata="{ajustes.url_metadatos}"', f'scope="{" ".join(ajustes.permisos)}"']
+    if error:
+        partes.append(f'error="{error}"')
+    if descripcion:
+        # Las cabeceras HTTP deben ir en ASCII (RFC 6750): sin tildes ni comillas.
+        ascii_ = unicodedata.normalize("NFKD", descripcion).encode("ascii", "ignore").decode().replace('"', "'")
+        partes.append(f'error_description="{ascii_}"')
+    return "Bearer " + ", ".join(partes)
+
+
+def _clave_interna() -> str | None:
+    """Clave con la que el MCP llama a la API REST (integracion interna; no sale del servidor)."""
+    claves = sorted(settings.allowed_api_keys)
+    return claves[0] if claves else None
+
+
+async def _autenticar_oauth(request: Request) -> str:
+    """Valida el token de acceso y devuelve la clave interna para consultar la API REST."""
+    autorizacion = request.headers.get("authorization", "")
+    token = autorizacion[7:].strip() if autorizacion.lower().startswith("bearer ") else ""
+    if not token:
+        if ajustes.allow_internal_api_key:
+            interna = _clave_valida_por_cabecera(request)
+            if interna:
+                return interna
+        raise ErrorToken(401, None, "Falta el token de acceso")
+    await asyncio.to_thread(_verificador().verificar, token)  # lanza ErrorToken si no es valido
+    interna = _clave_interna()
+    if interna is None:
+        logger.error("mcp oauth: no hay ninguna clave de API interna configurada")
+        raise ErrorToken(500, None, "El servicio no está configurado")
+    return interna
 
 PROTOCOLOS_SOPORTADOS = ("2025-06-18", "2025-03-26", "2024-11-05")
 NOMBRE_SERVIDOR = "consulta-judicial-ecuador"
@@ -222,6 +272,17 @@ def _clave_presentada(request: Request) -> str | None:
         if autorizacion.lower().startswith("bearer "):
             clave = autorizacion[7:].strip()
     return clave or None
+
+
+def _clave_valida_por_cabecera(request: Request) -> str | None:
+    """Solo la cabecera X-API-Key (nunca Authorization: Bearer)."""
+    presentada = request.headers.get("x-api-key")
+    if not presentada:
+        return None
+    coincide = False
+    for permitida in settings.allowed_api_keys:
+        coincide = hmac.compare_digest(presentada.encode(), permitida.encode()) or coincide
+    return presentada if coincide else None
 
 
 def _clave_valida(request: Request) -> str | None:
@@ -503,13 +564,22 @@ async def _procesar(mensaje: Any, request: Request, clave: str) -> dict[str, Any
 
 @router.post("/mcp", include_in_schema=False)
 async def mcp_post(request: Request) -> Response:
-    clave = _clave_valida(request)
-    if clave is None:
-        return JSONResponse(
-            _error(None, -32001, "No autorizado: falta la clave de API o no es válida."),
-            status_code=401,
-            headers={"WWW-Authenticate": 'Bearer realm="consulta-judicial-ecuador"'},
-        )
+    if ajustes.habilitado:
+        try:
+            clave = await _autenticar_oauth(request)
+        except ErrorToken as exc:
+            cabeceras = {"WWW-Authenticate": _desafio(exc.codigo, exc.descripcion)} if exc.estado in (401, 403) else {}
+            if exc.estado == 403 and exc.codigo is None:
+                cabeceras = {}
+            return JSONResponse(_error(None, -32001, exc.descripcion), status_code=exc.estado, headers=cabeceras)
+    else:
+        clave = _clave_valida(request)
+        if clave is None:
+            return JSONResponse(
+                _error(None, -32001, "No autorizado: falta la clave de API o no es válida."),
+                status_code=401,
+                headers={"WWW-Authenticate": 'Bearer realm="consulta-judicial-ecuador"'},
+            )
     try:
         cuerpo = await request.json()
     except ValueError:
@@ -520,6 +590,24 @@ async def mcp_post(request: Request) -> Response:
         return JSONResponse(respuestas) if respuestas else Response(status_code=202)
     respuesta = await _procesar(cuerpo, request, clave)
     return JSONResponse(respuesta) if respuesta is not None else Response(status_code=202)
+
+
+@router.get("/.well-known/oauth-protected-resource/mcp", include_in_schema=False)
+@router.get("/.well-known/oauth-protected-resource", include_in_schema=False)
+async def metadatos_recurso_protegido() -> Response:
+    """RFC 9728: dice a los clientes que servidor de autorizacion y permisos usar (publico)."""
+    if not ajustes.habilitado:
+        return Response(status_code=404)
+    return JSONResponse(
+        {
+            "resource": ajustes.audiencia,
+            "authorization_servers": [ajustes.oauth_issuer],
+            "scopes_supported": ajustes.permisos,
+            "bearer_methods_supported": ["header"],
+            "resource_name": "Consulta Judicial Ecuador",
+        },
+        headers={"Cache-Control": "public, max-age=300"},
+    )
 
 
 @router.api_route("/mcp", methods=["GET", "PUT", "PATCH", "DELETE"], include_in_schema=False)
