@@ -5,7 +5,7 @@ Lee la clave de la variable de entorno SATJE_API_KEY (nunca se imprime) y solo u
 biblioteca estandar. Imprime estados y nombres de campos, NO el contenido de los juicios.
 
 Uso:
-    SATJE_API_KEY=... python mcp_verificar.py [--base http://127.0.0.1:8010] [--proceso 01333-2024-12766]
+    SATJE_API_KEY=... python mcp_verificar.py [--base http://127.0.0.1:8010] [--proceso 01333-2024-12766] [--cedula 0102030405]
 """
 from __future__ import annotations
 
@@ -17,6 +17,7 @@ import urllib.request
 
 BASE = "http://127.0.0.1:8010"
 PROCESO = "01333-2024-12766"
+CEDULA = ""
 CLAVE = os.environ.get("SATJE_API_KEY", "")
 fallos = 0
 
@@ -83,11 +84,13 @@ def resultado_de(herramienta: str, argumentos: dict):
 
 
 def main(argv: list[str]) -> int:
-    global BASE, PROCESO
+    global BASE, PROCESO, CEDULA
     if "--base" in argv:
         BASE = argv[argv.index("--base") + 1].rstrip("/")
     if "--proceso" in argv:
         PROCESO = argv[argv.index("--proceso") + 1]
+    if "--cedula" in argv:
+        CEDULA = argv[argv.index("--cedula") + 1]
     if not CLAVE:
         print("Falta la variable SATJE_API_KEY.")
         return 2
@@ -134,6 +137,18 @@ def main(argv: list[str]) -> int:
     estado, datos, es_error, extra = resultado_de("consultarRiesgoAbandono", {"idJuicio": id_real or PROCESO})
     ok = datos is not None and not es_error
     verificar("consultarRiesgoAbandono", ok, f"success={datos.get('success')} partial={datos.get('partial')}" if ok else str(extra))
+
+    # 6b. busqueda por cedula a traves de MCP (cada rol por separado); solo conteos, sin datos de personas
+    if CEDULA:
+        estado, datos, es_error, extra = resultado_de("buscarJuiciosPorCedula", {"cedula": CEDULA})
+        ok = datos is not None and not es_error
+        detalle = (
+            f"success={datos.get('success')} partial={datos.get('partial')} total={datos.get('total')} "
+            f"roles={datos.get('consultadoPorRol')} errores={[e.get('code') for e in datos.get('partialErrors', [])]}"
+            if ok
+            else str(extra)
+        )
+        verificar("buscarJuiciosPorCedula (ambos roles, uno por llamada)", ok, detalle)
 
     # 7. ¿la API REST acepta numeros con guiones directamente? (sin pasar por MCP)
     print("\nREST directo: ¿acepta el número con guiones? (código HTTP)")

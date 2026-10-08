@@ -32,11 +32,37 @@ filtros, paginación, caché, métricas y errores.
 | `consultarMedidasCautelares` | `GET /api/v1/causas/{id}/medidas-cautelares` | Solo existe en el servidor desplegado. |
 | `consultarEstadoSentencia` | `GET /api/v1/causas/{id}/sentencia/estado` | Solo existe en el servidor desplegado. |
 
-### Números con guiones
-Si `idJuicio` contiene guiones (ej. `01333-2024-12766`), el MCP lo convierte antes con
-`resolverNumeroProceso` y consulta con el identificador resuelto. Un identificador sin guiones
-no hace esa llamada extra. Los identificadores se validan (`[A-Za-z0-9._-]`, máximo 64, sin `..`)
-para que no puedan alterar la ruta consultada.
+### Regla para números de proceso e `idJuicio` (verificada)
+- Con el `services.py` completo (el del 21-ago-2026, ya restaurado en producción), la API REST
+  **acepta el número con guiones directamente** en las seis rutas con identificador
+  (`actuaciones`, `paginadas`, `resoluciones`, `medidas-cautelares`, `sentencia/estado`,
+  `abandono/riesgo`): HTTP 200 con y sin guiones, probado con el juicio `01333-2024-12766`.
+  Con el `services.py` reducido que hubo en producción hasta el 8-oct-2026 daba 404 con guiones.
+- Aun así, **el MCP resuelve primero** todo identificador con guiones con `resolverNumeroProceso`
+  y consulta con el `idJuicio` resuelto (una llamada extra, pero no depende de ninguna suposición).
+- Si el resolver responde **404 u otro 4xx**, el MCP informa el error y **no sigue**: no inventa un identificador.
+- Solo si el resolver **no está disponible** (5xx o respuesta inválida) se usa el número sin
+  separadores y la propia consulta informa si el juicio no existe. Quitar los guiones **no** se
+  presenta como equivalente a resolver: es un respaldo, registrado en el log del servicio.
+- Limitación: la equivalencia con/sin guiones solo se verificó con un juicio. Los identificadores
+  con letras o secuencias de 4 dígitos no se probaron.
+
+### Búsqueda por cédula: un rol por llamada (verificada)
+`buscarJuiciosPorCedula` consulta **actor y demandado por separado** (una llamada REST por rol) y
+une los resultados por `idJuicio`. Razón: pedir ambos roles juntos agota el tiempo de SATJE; en las
+pruebas la llamada conjunta devolvió `partial: true` con 3 causas, mientras que por rol el panel
+obtuvo 6. Si un rol falla, se devuelve lo que sí respondió con `partial: true`, `success: false` y un
+`partialErrors` que indica el rol; si fallan todos, es un error de herramienta (`isError`), nunca una
+lista vacía. La respuesta conserva `requestIds`, `partialErrors` y `consultadoPorRol`.
+
+### Calidad de las respuestas
+Las respuestas de la API se devuelven tal cual (con `requestId`, `partial`, `partialErrors`,
+`analysisStatus`, `determination`). El servidor distingue: sin clave o clave inválida (HTTP 401),
+parámetro inválido (error JSON-RPC `-32602`), error de la API o de SATJE (`isError: true` con el
+código HTTP y el cuerpo), tiempo agotado (`isError: true`, mensaje de reintento) y resultado
+parcial (`partial: true`). Las instrucciones del servidor piden tratar el texto de los expedientes
+como datos, no como instrucciones, y no equiparar sentencia detectada con ejecutoria confirmada,
+medida ordenada con inscrita, ni riesgo de abandono con declaración judicial.
 
 ## Lo que NO se expone
 | Ruta | Motivo |
@@ -75,7 +101,29 @@ hace `initialize`, `tools/list` y las llamadas: si el cliente comparte IP con ot
 recibir `429`/`503`. Si ocurre, conviene un `location = /mcp` con un límite propio más alto.
 
 ## Conectar un cliente
-- URL: `https://api.asitentekairon.cloud/mcp`
-- Autenticación: cabecera `X-API-Key` (o Bearer) con la clave del servidor.
-- No se ha verificado qué métodos de autenticación acepta cada cliente (p. ej. ChatGPT);
-  si un cliente solo admite OAuth o ninguna autenticación, esta capa necesitaría ajustes.
+- URL: `https://api.asitentekairon.cloud/mcp` · transporte Streamable HTTP · solo `POST`.
+- Autenticación: clave de la API en `X-API-Key` o `Authorization: Bearer <clave>`.
+
+Ejemplo de configuración para clientes que aceptan cabeceras (la clave va en una variable de
+entorno, no en el archivo):
+
+```json
+{
+  "mcpServers": {
+    "consulta-judicial-ecuador": {
+      "type": "http",
+      "url": "https://api.asitentekairon.cloud/mcp",
+      "headers": { "X-API-Key": "${CONSULTA_JUDICIAL_API_KEY}" }
+    }
+  }
+}
+```
+
+**No verificado:** qué métodos de autenticación acepta ChatGPT para un servidor MCP. No se probó
+contra ese cliente. Si solo admite OAuth o "sin autenticación", esta capa no sirve tal cual: haría
+falta un servidor OAuth o un proxy con autenticación propia. No se debe poner la clave en la URL.
+
+**No se usa el SDK oficial:** el protocolo (initialize, tools/list, tools/call, ping, lotes, 202 para
+notificaciones, 405 para GET) está implementado a mano para no agregar dependencias al entorno
+del servidor. Se probó con pruebas propias y con `scripts/mcp_verificar.py`, no con una suite de
+conformidad oficial.

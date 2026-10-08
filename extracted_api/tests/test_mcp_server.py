@@ -36,6 +36,8 @@ def _app(registro: list):
         await anotar(request)
         if numero_proceso == "99999-2099-99999":
             raise HTTPException(status_code=404, detail="No existe")
+        if numero_proceso == "88888-2088-88888":
+            raise HTTPException(status_code=500, detail="resolver caido")
         return {"success": True, "idJuicio": numero_proceso.replace("-", ""), "numeroProceso": numero_proceso}
 
     for sufijo in ["actuaciones", "actuaciones/paginadas", "resoluciones", "medidas-cautelares", "sentencia/estado", "abandono/riesgo"]:
@@ -58,7 +60,16 @@ def _app(registro: list):
     @app.post("/api/v1/causas/buscar", dependencies=[Depends(exigir)])
     async def buscar(request: Request):
         await anotar(request)
-        return {"success": True, "partial": False, "data": []}
+        cuerpo = await request.json()
+        roles = cuerpo.get("roles") or ["actor", "demandado"]
+        if cuerpo["cedula"] == "0000000001" and "demandado" in roles:
+            raise HTTPException(status_code=504, detail="SATJE_TIMEOUT")
+        datos = []
+        if "actor" in roles:
+            datos.append({"idJuicio": "A1", "accion": "ARCHIVO", "rolesEncontrados": ["actor"]})
+        if "demandado" in roles:
+            datos += [{"idJuicio": "D1", "accion": "COBRO", "rolesEncontrados": ["demandado"]}, {"idJuicio": "A1", "accion": "ARCHIVO", "rolesEncontrados": ["demandado"]}]
+        return {"success": True, "partial": False, "source": "SATJE", "mode": "live", "retrievedAt": "2026-10-08T00:00:00+00:00", "cedula": cuerpo["cedula"], "total": len(datos), "data": datos, "partialErrors": [], "requestId": "req-" + "-".join(roles)}
 
     @app.post("/api/v1/documentos/hba/extract-text", dependencies=[Depends(exigir)])
     async def texto(request: Request):
@@ -238,12 +249,45 @@ def test_resoluciones_riesgo_y_el_resto_usan_su_ruta_y_parametros(contexto):
     assert registro[-1][1] == f"/api/v1/causas/{ID_REAL}/actuaciones/68880635/documentos"
 
 
-def test_buscar_por_cedula_envia_el_cuerpo_correcto(contexto):
+def test_buscar_por_cedula_con_un_rol_envia_ese_rol(contexto):
     cliente, registro = contexto
     llamar(cliente, "buscarJuiciosPorCedula", {"cedula": "0000000000", "roles": ["demandado"], "incluirTodasLasPaginas": True})
+    assert len(registro) == 1
     metodo, ruta, _, cuerpo = registro[-1]
     assert (metodo, ruta) == ("POST", "/api/v1/causas/buscar")
     assert cuerpo == {"cedula": "0000000000", "roles": ["demandado"], "incluirTodasLasPaginas": True}
+
+
+def test_sin_roles_consulta_cada_rol_por_separado_y_une_los_resultados(contexto):
+    cliente, registro = contexto
+    r = llamar(cliente, "buscarJuiciosPorCedula", {"cedula": "0000000000"})
+    cuerpos = sorted(json.dumps(x[3]["roles"]) for x in registro)
+    assert cuerpos == ['["actor"]', '["demandado"]'], "cada rol debe ir en su propia llamada"
+    datos = json.loads(r["result"]["content"][0]["text"])
+    assert datos["success"] is True and datos["partial"] is False
+    ids = sorted(x["idJuicio"] for x in datos["data"])
+    assert ids == ["A1", "D1"] and datos["total"] == 2  # A1 aparece en los dos roles y no se duplica
+    a1 = next(x for x in datos["data"] if x["idJuicio"] == "A1")
+    assert sorted(a1["rolesEncontrados"]) == ["actor", "demandado"]
+    assert sorted(datos["requestIds"]) == ["req-actor", "req-demandado"]
+
+
+def test_si_un_rol_falla_devuelve_lo_que_hay_marcado_como_parcial_y_no_como_vacio(contexto):
+    cliente, _ = contexto
+    r = llamar(cliente, "buscarJuiciosPorCedula", {"cedula": "0000000001"})
+    assert r["result"]["isError"] is False
+    datos = json.loads(r["result"]["content"][0]["text"])
+    assert datos["partial"] is True and datos["success"] is False
+    assert [x["idJuicio"] for x in datos["data"]] == ["A1"]  # lo del rol que si respondio
+    errores = datos["partialErrors"]
+    assert any(e.get("role") == "demandado" and "504" in e.get("message", "") for e in errores)
+
+
+def test_si_fallan_todos_los_roles_es_un_error_y_no_una_lista_vacia(contexto):
+    cliente, _ = contexto
+    r = llamar(cliente, "buscarJuiciosPorCedula", {"cedula": "0000000001", "roles": ["demandado"]})
+    assert r["result"]["isError"] is True
+    assert "504" in r["result"]["content"][0]["text"]
 
 
 def test_leer_texto_documento_envia_el_documento(contexto):
@@ -266,23 +310,23 @@ def test_un_id_sin_guiones_no_llama_al_resolver(contexto):
     assert [x[1] for x in registro] == [f"/api/v1/causas/{ID_REAL}/medidas-cautelares"]
 
 
-def test_si_el_resolver_falla_se_usa_el_numero_sin_guiones_y_la_consulta_decide(contexto):
-    # El resolver del servidor puede estar caido o no existir: el identificador sin guiones es
-    # el que ya usan las demas rutas, asi que se consulta con el y se informa lo que responda.
+def test_si_el_resolver_dice_que_el_proceso_no_existe_se_informa_y_no_se_adivina(contexto):
     cliente, registro = contexto
     r = llamar(cliente, "consultarEstadoSentencia", {"idJuicio": "99999-2099-99999"})
-    assert [x[1] for x in registro] == [
-        "/api/v1/causas/resolver/99999-2099-99999",
-        "/api/v1/causas/99999209999999/sentencia/estado",
-    ]
-    assert r["result"]["isError"] is False  # la ruta de prueba responde bien con ese id
-
-
-def test_si_tras_el_respaldo_la_consulta_falla_el_error_es_el_de_la_consulta(contexto):
-    cliente, registro = contexto
-    r = llamar(cliente, "consultarEstadoSentencia", {"idJuicio": "000-"})
     assert r["result"]["isError"] is True
-    assert "422" in r["result"]["content"][0]["text"]
+    assert "404" in r["result"]["content"][0]["text"]
+    assert len(registro) == 1, "no debe seguir consultando con un numero inventado"
+
+
+def test_si_el_resolver_no_esta_disponible_se_usa_el_numero_sin_guiones(contexto):
+    # Solo ante un fallo del propio resolver (5xx), no ante un "no existe".
+    cliente, registro = contexto
+    r = llamar(cliente, "consultarEstadoSentencia", {"idJuicio": "88888-2088-88888"})
+    assert [x[1] for x in registro] == [
+        "/api/v1/causas/resolver/88888-2088-88888",
+        "/api/v1/causas/88888208888888/sentencia/estado",
+    ]
+    assert r["result"]["isError"] is False
 
 
 def test_resolver_numero_proceso_devuelve_el_identificador(contexto):
@@ -345,3 +389,9 @@ def test_un_fallo_inesperado_se_informa_como_error_de_herramienta_y_no_como_500(
     texto = resultado["content"][0]["text"]
     assert "RuntimeError" in texto  # dice de que tipo fue, para poder diagnosticar
     assert "clave-de-prueba" not in texto and "datos sensibles" not in texto  # pero no filtra el mensaje
+
+
+def test_las_instrucciones_del_servidor_piden_tratar_los_expedientes_como_datos(contexto):
+    cliente, _ = contexto
+    texto = rpc(cliente, "initialize", {"protocolVersion": "2025-06-18"}).json()["result"]["instructions"].lower()
+    assert "datos" in texto and "instrucciones" in texto
