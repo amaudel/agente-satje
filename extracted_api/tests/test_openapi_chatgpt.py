@@ -132,3 +132,44 @@ def test_servidor_https_y_todas_las_operaciones_conocidas_cubiertas():
     salida, _ = reducir(_mini_spec())
     assert salida["servers"][0]["url"].startswith("https://")
     assert len(OPERACIONES) == 8
+
+
+def _spec_como_el_del_servidor():
+    """Igual que el que genera FastAPI en el servidor: cada operacion trae su propio
+    'security' con un esquema (APIKeyHeader) que el script no conserva."""
+    spec = _mini_spec()
+    for ruta in spec["paths"].values():
+        for op in ruta.values():
+            op["security"] = [{"APIKeyHeader": []}]
+    spec["components"]["securitySchemes"] = {"APIKeyHeader": {"type": "apiKey", "in": "header", "name": "X-API-Key"}}
+    return spec
+
+
+def test_ninguna_operacion_apunta_a_un_esquema_de_seguridad_que_no_existe():
+    salida, _ = reducir(_spec_como_el_del_servidor())
+    definidos = set(salida["components"]["securitySchemes"])
+    for ruta in salida["paths"].values():
+        for op in ruta.values():
+            for req in op.get("security", []):
+                assert set(req) <= definidos, req
+    # la autenticacion queda solo a nivel global
+    assert all("security" not in op for ruta in salida["paths"].values() for op in ruta.values())
+
+
+def test_quita_los_titulos_automaticos_para_reducir_el_tamano():
+    spec = _mini_spec()
+    spec["components"]["schemas"]["Evidencia"]["properties"]["texto"]["title"] = "Texto"
+    salida, _ = reducir(spec)
+    assert '"title"' not in json.dumps(salida)
+
+
+def test_explica_como_llenar_los_identificadores_y_la_busqueda_por_cedula():
+    spec = _spec_como_el_del_servidor()
+    spec["paths"]["/api/v1/causas/{id_juicio}/actuaciones/paginadas"]["get"]["parameters"][0]["schema"] = {"type": "string"}
+    salida, _ = reducir(spec)
+    pagina = salida["paths"]["/api/v1/causas/{id_juicio}/actuaciones/paginadas"]["get"]
+    id_param = next(p for p in pagina["parameters"] if p["name"] == "id_juicio")
+    assert "sin guiones" in id_param["description"]
+    solicitud = salida["components"]["schemas"]["BuscarCausasRequest"]["properties"]
+    assert "10 d" in solicitud["cedula"]["description"]
+    assert solicitud["roles"]["items"]["enum"] == ["actor", "demandado"]

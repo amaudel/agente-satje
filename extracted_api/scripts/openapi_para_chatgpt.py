@@ -79,6 +79,33 @@ def _refs(nodo) -> set[str]:
     return encontrados
 
 
+DESCRIPCION_PARAMETROS = {
+    "id_juicio": "Identificador del juicio sin guiones, por ejemplo 01333202412766. Si solo tiene el número con guiones, use resolverNumeroProceso.",
+    "codigo_actuacion": "Código de la actuación (campo 'codigo' de cada actuación).",
+    "numero_proceso": "Número de proceso con guiones, por ejemplo 01333-2024-12766.",
+    "fechaDesde": "Fecha mínima, formato AAAA-MM-DD.",
+    "fechaHasta": "Fecha máxima, formato AAAA-MM-DD.",
+    "fechaCorte": "Fecha de corte AAAA-MM-DD; si se omite se usa hoy.",
+    "tipo": "Filtra por texto del tipo de actuación, por ejemplo SENTENCIA u OFICIO.",
+    "page": "Número de página, desde 1.",
+    "pageSize": "Actuaciones por página (1 a 50).",
+    "orden": "asc: más antiguas primero; desc: más recientes primero.",
+    "tieneDocumento": "true: solo actuaciones con documento adjunto.",
+    "limit": "Máximo de resoluciones a devolver (1 a 50).",
+    "incluirSinDocumento": "true: incluye también actuaciones sin documento adjunto.",
+    "alertaDias": "Días de anticipación para la alerta (1 a 180).",
+}
+
+
+def _sin_titulos(nodo):
+    """Los 'title' que genera FastAPI repiten el nombre del campo y solo pesan."""
+    if isinstance(nodo, dict):
+        return {k: _sin_titulos(v) for k, v in nodo.items() if not (k == "title" and isinstance(v, str))}
+    if isinstance(nodo, list):
+        return [_sin_titulos(v) for v in nodo]
+    return nodo
+
+
 def reducir(spec: dict) -> tuple[dict, list[str]]:
     """Devuelve (esquema_reducido, operaciones_que_no_estaban_en_el_original)."""
     paths: dict[str, dict] = {}
@@ -97,6 +124,13 @@ def reducir(spec: dict) -> tuple[dict, list[str]]:
         if not op["parameters"]:
             del op["parameters"]
         op.pop("tags", None)
+        # La autenticacion es global (ApiKeyAuth). El 'security' propio de cada
+        # operacion apuntaba a un esquema del servidor que aqui no existe.
+        op.pop("security", None)
+        for parametro in op.get("parameters", []):
+            descripcion = DESCRIPCION_PARAMETROS.get(parametro.get("name", ""))
+            if descripcion:
+                parametro.setdefault("description", descripcion)
         paths.setdefault(ruta, {})[metodo] = op
 
     # Solo los modelos que usan las operaciones que quedaron (y los que ellos usan).
@@ -128,7 +162,13 @@ def reducir(spec: dict) -> tuple[dict, list[str]]:
             "schemas": {n: todos[n] for n in sorted(necesarios)},
         },
     }
-    return salida, faltantes
+    solicitud = salida["components"]["schemas"].get("BuscarCausasRequest", {}).get("properties", {})
+    if "cedula" in solicitud:
+        solicitud["cedula"]["description"] = "Cédula de 10 dígitos (o RUC de 13 terminado en 001), solo números."
+    if "roles" in solicitud:
+        solicitud["roles"]["description"] = "Rol de la persona en el juicio. Consulte un rol por vez para evitar tiempos agotados."
+        solicitud["roles"]["items"] = {"type": "string", "enum": ["actor", "demandado"]}
+    return _sin_titulos(salida), faltantes
 
 
 def main() -> int:
