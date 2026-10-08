@@ -8,7 +8,10 @@ token real en la variable MCP_TOKEN, las llamadas MCP autenticadas.
 
 Nunca imprime el token ni la clave de la API.
 
-Uso:
+Antes de desplegar nada, solo con el dominio del proveedor:
+    python mcp_oauth_verificar.py --solo-emisor https://TU-TENANT.us.auth0.com
+
+Uso completo:
     MCP_TOKEN=<token de acceso> SATJE_API_KEY=<clave> python mcp_oauth_verificar.py \\
         [--base https://api.asitentekairon.cloud] [--proceso 01333-2024-12766]
 (MCP_TOKEN y SATJE_API_KEY son opcionales; sin ellos se omiten esas comprobaciones.)
@@ -61,8 +64,43 @@ def json_o_nada(texto: str):
         return None
 
 
+def comprobar_servidor_de_autorizacion(emisor: str) -> dict | None:
+    """Lee los metadatos publicos del proveedor y comprueba lo que ChatGPT necesita."""
+    base = emisor if "://" in emisor else "https://" + emisor
+    meta = None
+    for ruta in ("/.well-known/oauth-authorization-server", "/.well-known/openid-configuration"):
+        estado, _, texto = http("GET", base.rstrip("/") + ruta, timeout=20)
+        if estado == 200 and isinstance(json_o_nada(texto), dict):
+            meta = json_o_nada(texto)
+            break
+    if meta is None:
+        verificar("metadatos del servidor de autorización", False, "no se pudieron leer (¿dominio correcto?)")
+        return None
+    verificar("PKCE con S256 anunciado", "S256" in (meta.get("code_challenge_methods_supported") or []), "ChatGPT exige PKCE S256")
+    verificar(
+        "registro dinámico de clientes disponible",
+        bool(meta.get("registration_endpoint")),
+        "si falta, hay que activarlo o registrar a mano el cliente de ChatGPT",
+        critico=False,
+    )
+    for campo in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
+        verificar(f"{campo} anunciado", bool(meta.get(campo)))
+    if meta.get("jwks_uri"):
+        estado, _, texto = http("GET", meta["jwks_uri"], timeout=20)
+        claves = (json_o_nada(texto) or {}).get("keys") if estado == 200 else None
+        verificar("claves de firma publicadas (JWKS)", bool(claves), f"{len(claves or [])} clave(s)")
+    print(f"\n      Emisor EXACTO para el .env (el 'iss' de los tokens):\n      MCP_OAUTH_ISSUER={meta.get('issuer', '')}\n")
+    return meta
+
+
 def main(argv: list[str]) -> int:
     global BASE, PROCESO
+    if "--solo-emisor" in argv:
+        emisor = argv[argv.index("--solo-emisor") + 1]
+        print(f"Comprobando el proveedor de identidad {emisor}\n")
+        comprobar_servidor_de_autorizacion(emisor)
+        print(f"{'TODO OK' if fallos == 0 else str(fallos) + ' VERIFICACIÓN(ES) FALLARON'}")
+        return 0 if fallos == 0 else 1
     if "--base" in argv:
         BASE = argv[argv.index("--base") + 1].rstrip("/")
     if "--proceso" in argv:
@@ -96,19 +134,7 @@ def main(argv: list[str]) -> int:
 
     # 5. capacidades del servidor de autorizacion
     if emisor:
-        meta = None
-        for ruta in ("/.well-known/oauth-authorization-server", "/.well-known/openid-configuration"):
-            estado, _, texto = http("GET", emisor.rstrip("/") + ruta, timeout=20)
-            if estado == 200 and json_o_nada(texto):
-                meta = json_o_nada(texto)
-                break
-        if meta is None:
-            verificar("metadatos del servidor de autorización", False, "no se pudieron leer", critico=False)
-        else:
-            verificar("PKCE con S256 anunciado", "S256" in (meta.get("code_challenge_methods_supported") or []), critico=True)
-            verificar("registro dinámico de clientes disponible", bool(meta.get("registration_endpoint")), "si falta, el cliente de ChatGPT debe registrarse a mano en el proveedor", critico=False)
-            for campo in ("authorization_endpoint", "token_endpoint", "jwks_uri"):
-                verificar(f"{campo} anunciado", bool(meta.get(campo)))
+        comprobar_servidor_de_autorizacion(emisor)
 
     # 6. con un token real
     if TOKEN:

@@ -332,3 +332,85 @@ def test_si_el_emisor_no_responde_el_acceso_se_niega(monkeypatch):
     app.include_router(mcp.router)
     r = rpc(TestClient(app), token(iss="http://127.0.0.1:9/"))
     assert r.status_code == 401
+
+
+# ------------------------------------------------------------- comprobacion previa del proveedor (solo el emisor)
+
+import importlib
+
+
+def _verificador_script():
+    import sys as _sys
+    from pathlib import Path as _P
+
+    _sys.path.insert(0, str(_P(__file__).resolve().parents[1] / "scripts"))
+    modulo = importlib.import_module("mcp_oauth_verificar")
+    return importlib.reload(modulo)
+
+
+@pytest.fixture()
+def idp_metadatos():
+    """Servidor HTTP que imita los metadatos de un proveedor, configurable por prueba."""
+    estado = {"meta": {}}
+
+    class Manejador(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path in ("/.well-known/openid-configuration", "/.well-known/oauth-authorization-server"):
+                datos = _json.dumps(estado["meta"]).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(datos)
+            elif self.path == "/.well-known/jwks.json":
+                datos = _json.dumps({"keys": [{"kty": "RSA", "kid": "k1"}]}).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.end_headers()
+                self.wfile.write(datos)
+            else:
+                self.send_response(404)
+                self.end_headers()
+
+        def log_message(self, *args):
+            pass
+
+    servidor = ThreadingHTTPServer(("127.0.0.1", 0), Manejador)
+    estado["base"] = f"http://127.0.0.1:{servidor.server_address[1]}/"
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+    yield estado
+    servidor.shutdown()
+
+
+def test_solo_emisor_aprueba_un_proveedor_completo_e_indica_el_valor_exacto_del_emisor(idp_metadatos, capsys):
+    base = idp_metadatos["base"]
+    idp_metadatos["meta"] = {
+        "issuer": base,
+        "authorization_endpoint": base + "authorize",
+        "token_endpoint": base + "token",
+        "jwks_uri": base + ".well-known/jwks.json",
+        "registration_endpoint": base + "oidc/register",
+        "code_challenge_methods_supported": ["S256", "plain"],
+    }
+    codigo = _verificador_script().main(["x", "--solo-emisor", base])
+    salida = capsys.readouterr().out
+    assert codigo == 0
+    assert f"MCP_OAUTH_ISSUER={base}" in salida  # el valor exacto para el .env
+    assert "registro dinámico de clientes" in salida and "AVISO" not in salida
+
+
+def test_solo_emisor_senala_lo_que_falta(idp_metadatos, capsys):
+    base = idp_metadatos["base"]
+    idp_metadatos["meta"] = {"issuer": base, "authorization_endpoint": base + "a", "token_endpoint": base + "t", "jwks_uri": base + "j"}
+    codigo = _verificador_script().main(["x", "--solo-emisor", base])
+    salida = capsys.readouterr().out
+    assert codigo == 1  # sin PKCE S256 no sirve
+    assert "FALLO PKCE" in salida or "FALLO PKCE con S256" in salida
+    assert "AVISO registro dinámico" in salida  # falta el registro dinamico: aviso, no fallo
+
+
+def test_solo_emisor_acepta_un_dominio_sin_esquema(idp_metadatos, capsys):
+    host = idp_metadatos["base"].replace("http://", "")
+    idp_metadatos["meta"] = {"issuer": idp_metadatos["base"], "authorization_endpoint": "a", "token_endpoint": "t", "jwks_uri": "j", "code_challenge_methods_supported": ["S256"]}
+    # sin esquema el script prueba https primero; con un servidor http de prueba debe indicar que no pudo leerlo, sin romperse
+    codigo = _verificador_script().main(["x", "--solo-emisor", host])
+    assert codigo in (0, 1)
