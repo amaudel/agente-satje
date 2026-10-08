@@ -455,3 +455,9 @@ async def api_juicios_resumen_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+# --- Capa MCP (Streamable HTTP) sobre esta misma API: ver app/mcp_server.py
+from .mcp_server import router as mcp_router  # noqa: E402
+
+app.include_router(mcp_router)
