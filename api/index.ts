@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../lib/vercel-http-types.js";
 import OpenAI from "openai";
 import {
   CATEGORIAS_INDICADORES,
@@ -10,6 +10,7 @@ import {
   type CausaConEstado,
 } from "../lib/legal-analysis.js";
 import { procesarCausaIndividual } from "../lib/procesar-causa.js";
+import { agruparMedidasCautelares } from "../lib/medidas-dedup.js";
 import { generarDashboardHTML } from "../lib/dashboard-html.js";
 import { upsertUpstashVector, queryUpstashVector } from "../lib/upstash.js";
 import {
@@ -101,7 +102,7 @@ Analiza las actuaciones y responde con precisión:
 2. Revisa e indica si existe SENTENCIA emitida en el expediente.
 3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
 4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
-5. Entrega un Resumen Ejecutivo del proceso (2-3 oraciones) y la próxima acción legal sugerida.`;
+5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia.`;
 
   const muestraActuaciones = resultado.actuaciones.slice(0, 25);
   const cv = resultado.cicloVidaMedida;
@@ -111,7 +112,7 @@ Analiza las actuaciones y responde con precisión:
       { role: "system", content: promptSistema },
       {
         role: "user",
-        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Inscrita: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Abandono (COGEP): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días restantes)\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
       },
     ],
     temperature: 0.2,
@@ -854,6 +855,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     const resultadoIndividual = await procesarCausaIndividual(causaInput, baseUrl, apiKey);
     const msSatje = Date.now() - tFaseSatje;
     const actuaciones = resultadoIndividual.actuaciones;
+    const agrupacionMedidas = agruparMedidasCautelares(actuaciones);
 
     const indicadoresEncontrados: Record<string, any[]> = {
       medidas_cautelares: [],
@@ -953,17 +955,10 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           3
         );
 
-        // Si la causa actual no tiene fecha de inscripción confirmada, intentar recuperar fecha de razones similares en Upstash Vector DB
-        if (!resultadoIndividual.fechaInscripcionMedida) {
-          const matchRegistral = queryMedidas.find(r => r.metadata?.fechaInscripcion && r.score >= 0.78);
-          if (matchRegistral && matchRegistral.metadata?.fechaInscripcion) {
-            resultadoIndividual.fechaInscripcionMedida = matchRegistral.metadata.fechaInscripcion;
-            cautelarData.fechaInscripcion = matchRegistral.metadata.fechaInscripcion;
-            cautelarData.confianza = "ALTA";
-            cautelarData.observacion += ` [Recuperado vía Upstash Vector RAG desde Causa ${matchRegistral.metadata.causa}]`;
-            vectorDbStatus.recuperacionMedidaRag = true;
-          }
-        }
+        // Seguridad probatoria: la similitud semántica con OTRA causa nunca acredita
+        // la inscripción de una medida en el expediente consultado.
+        // Upstash se utiliza solo como referencia contextual; no modifica fechas,
+        // estados registrales ni niveles de confianza del resultado SATJE.
 
         // Indexar la Medida Cautelar dedicada en Upstash Vector DB
         await upsertUpstashVector(upstashUrl, upstashToken, {
@@ -1028,7 +1023,11 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       resumen_pendiente: resumenPendiente,
       vector_db_status: vectorDbStatus,
       resumen_indicadores: {
-        medidas_cautelares_count: indicadoresEncontrados.medidas_cautelares.length,
+        // Cuenta una medida detectada, no todas las actuaciones que la mencionan.
+        medidas_cautelares_count: agrupacionMedidas.totalIdentificadas,
+        medidas_cautelares_conteo_exhaustivo: false,
+        medidas_cautelares_advertencia: agrupacionMedidas.advertencia,
+        medidas_cautelares_grupos: agrupacionMedidas.grupos,
         resoluciones_count: indicadoresEncontrados.resoluciones_sentencias.length,
         notificaciones_count: indicadoresEncontrados.notificaciones_deprecatorios.length,
         riesgo_abandono_count: indicadoresEncontrados.riesgo_abandono.length,

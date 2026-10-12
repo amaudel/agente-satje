@@ -1,4 +1,4 @@
-import type { VercelRequest } from "@vercel/node";
+import type { VercelRequest } from "./vercel-http-types.js";
 import crypto from "node:crypto";
 
 export const SESSION_COOKIE_NAME = "satje_session";

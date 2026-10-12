@@ -1,0 +1,42 @@
+name: Validacion SATJE (PR)
+on:
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'lib/**'
+      - 'src/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/satje-validation.yml'
+  push:
+    branches:
+      - 'fix/satje-auditoria-evidencia-20261012'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: TypeScript typecheck
+        run: npm run typecheck
+      - name: Unit tests
+        run: npm test
+      - name: Dependency security audit
+        if: always()
+        run: |
+          npm audit --json > audit-result.json || true
+          node -e 'const a=require("./audit-result.json");console.log("Audit totals:",JSON.stringify(a.metadata?.vulnerabilities||{}))'
+          npm audit --audit-level=high
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: satje-audit
+          path: audit-result.json
+          retention-days: 3
