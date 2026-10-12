@@ -249,8 +249,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           return res.status(400).json({ok:false,error:"Máximo cuatro códigos numéricos por reintento"});
         }
         const retryMode = listaCodigos.length > 0;
-        const seleccion = retryMode ? actuaciones.filter((a:any) => listaCodigos.includes(String(a?.codigoActuacion ?? a?.codigo))) : actuaciones;
-        if (retryMode && seleccion.length !== new Set(listaCodigos).size) return res.status(409).json({ok:false,error:"Actuaciones cambiaron; reiniciar inventario"});
+        const codigosUnicos = [...new Set(listaCodigos)];
+        const encontrados = new Map<string,any>();
+        for (const a of actuaciones) {
+          const codigo = String(a?.codigoActuacion ?? a?.codigo ?? "");
+          if (codigosUnicos.includes(codigo) && !encontrados.has(codigo)) encontrados.set(codigo,a);
+        }
+        const seleccion = retryMode ? codigosUnicos.filter(c => encontrados.has(c)).map(c => encontrados.get(c)) : actuaciones;
+        const ausentes = retryMode ? codigosUnicos.filter(c => !encontrados.has(c)) : [];
+        if (ausentes.length) return res.status(409).json({ok:false,error:"Códigos no encontrados en la consulta actual",codigosAusentes:ausentes});
         const inventario = await inventariarAdjuntos({causa,baseUrl,headers,actuaciones:seleccion,offset:retryMode?0:offset,limite:4,concurrencia:1,timeoutMs:4500});
         const parcial = fuente?.success===false || (Array.isArray(fuente?.partialErrors) && fuente.partialErrors.length>0);
         return res.status(200).json({ok:true,numeroProceso:causa,totalActuaciones:actuaciones.length,actuacionesParciales:parcial,inventario,
