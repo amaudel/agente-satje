@@ -1021,7 +1021,8 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       resumen_pendiente: resumenPendiente,
       vector_db_status: vectorDbStatus,
       resumen_indicadores: {
-        medidas_cautelares_count: indicadoresEncontrados.medidas_cautelares.length,
+        // Cuenta una medida detectada, no todas las actuaciones que la mencionan.
+        medidas_cautelares_count: resultadoIndividual.medidaDetectada ? 1 : 0,
         resoluciones_count: indicadoresEncontrados.resoluciones_sentencias.length,
         notificaciones_count: indicadoresEncontrados.notificaciones_deprecatorios.length,
         riesgo_abandono_count: indicadoresEncontrados.riesgo_abandono.length,
