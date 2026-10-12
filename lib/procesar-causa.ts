@@ -7,6 +7,7 @@ import {
   detectorCicloVidaMedidaCautelar,
   calcularAlertaAbandonoProcesal,
 } from "./legal-analysis.js";
+import { verificarIdentidadDeprecatorio } from "./deprecatorios-identidad.js";
 
 // Presupuesto de tiempo por causa. Se reserva margen frente al maxDuration de
 // la funcion serverless (60s) para poder devolver una respuesta en vez de que
@@ -192,6 +193,8 @@ export async function procesarCausaIndividual(
     const principal = riesgo.relojProcesoPrincipal;
     const deprecada = riesgo.relojUnidadDeprecada;
     const general = riesgo.alertaGeneral;
+    const verificacion = deprecada ? verificarIdentidadDeprecatorio(actuaciones, String(deprecada?.ultimaActuacion?.actividadResumen || "")) : null;
+    const discrepancia = verificacion?.estado === "DISCREPANCIA";
     const determinante = general.ambitoMasCercano === "unidad_deprecada" ? deprecada : principal;
     const dias = Number(general.diasRestantes);
     const vencido = dias <= 0;
@@ -206,9 +209,9 @@ export async function procesarCausaIndividual(
         fechaReferencialAbandono: String(general.fechaReferencialAbandono || "N/A"),
         esDeprecatorio: Boolean(deprecada),
         relojDeprecatorioInfo: deprecada
-          ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}.`
+          ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}. ${discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar: el oficio menciona distinta parte actora. No usar este reloj para conclusiones jurídicas hasta contrastar documentos." : ""}`
           : undefined,
-        explicacion: "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
+        explicacion: discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: el reloj deprecado contiene partes discordantes; no permite concluir el efecto jurídico de esa actuación. Verificar expediente." : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
       };
     }
   } else if (alertaLocal.nivel !== "abandonada" && alertaLocal.nivel !== "improcedente") {
