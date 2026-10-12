@@ -208,11 +208,14 @@ export async function procesarCausaIndividual(
   };
   const cobertura = {
     actuacionesRecuperadas: actuaciones.length,
+    actuacionesConAdjuntoMarcado: actuaciones.filter((a:any) => a?.tieneDocumento === true).length,
+    actuacionesSinAdjuntoMarcado: actuaciones.filter((a:any) => a?.tieneDocumento === false).length,
+    incidentesIdentificados: new Set(actuaciones.map((a:any) => String(a?.idIncidenteJudicatura || "")).filter(Boolean)).size,
     actuacionesParciales: erroresParciales.length > 0 || Boolean(backendError),
     documentosInventariados: false,
     documentosLeidos: null as number | null,
     documentosTotales: null as number | null,
-    advertencia: "Actuaciones recuperadas no equivale a expediente documental completo. Total de PDF no inventariado; cobertura documental desconocida.",
+    advertencia: "El campo tieneDocumento solo indica existencia de adjuntos, no cantidad de PDF ni lectura exitosa. Total de PDF no inventariado; cobertura documental desconocida.",
   };
   const riesgo = await riesgoEspecializadoPromise;
   let alertaAbandono = alertaLocal;
