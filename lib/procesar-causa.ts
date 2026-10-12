@@ -53,7 +53,7 @@ export async function procesarCausaIndividual(
     } catch { return null; }
   };
   const sentenciaEspecializadaPromise = consultarEspecializada("sentencia/estado");
-  const medidasEspecializadasPromise = consultarEspecializada("medidas/cautelares");
+  const medidasEspecializadasPromise = consultarEspecializada("medidas-cautelares");
 
   // El backend especializado separa proceso principal y unidad deprecada.
   // Se inicia en paralelo para no extender el presupuesto de la consulta.
