@@ -39,3 +39,11 @@ jobs:
           name: satje-audit
           path: audit-result.json
           retention-days: 3
+      - name: Modernization compatibility trial (does not commit)
+        continue-on-error: true
+        run: |
+          npm install --save-exact @vercel/node@23.0.1
+          npm install --save-dev --save-exact wrangler@4.86.0
+          npm run typecheck
+          npm test
+          npm audit --audit-level=high
