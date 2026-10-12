@@ -7,10 +7,12 @@ import {
   seleccionarJuicioVigente,
   evaluarCompletitudBusqueda,
   sinSeparadoresCausa,
+  extraerTodasLasActuaciones,
   type CausaConEstado,
 } from "../lib/legal-analysis.js";
 import { procesarCausaIndividual } from "../lib/procesar-causa.js";
 import { agruparMedidasCautelares } from "../lib/medidas-dedup.js";
+import { inventariarAdjuntos } from "../lib/inventario-adjuntos.js";
 import { generarDashboardHTML } from "../lib/dashboard-html.js";
 import { upsertUpstashVector, queryUpstashVector } from "../lib/upstash.js";
 import {
@@ -216,6 +218,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } else if (!bodyData) {
       bodyData = {};
+    }
+
+    // Inventario incremental autorizado por sesión. Cada página consulta hasta ocho actuaciones.
+    if (req.query.action === "inventario-adjuntos") {
+      const causa = String(req.query.causa || "").replace(/-/g, "");
+      if (!/^[0-9A-Za-z]{13,20}$/.test(causa)) return res.status(400).json({ok:false,error:"Identificador de causa inválido"});
+      const offset = Number(req.query.offset || 0);
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10000) return res.status(400).json({ok:false,error:"Offset inválido"});
+      const baseUrl = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKey = process.env.SATJE_API_KEY;
+      if (!apiKey) return res.status(503).json({ok:false,error:"API SATJE no configurada"});
+      const headers = {Accept:"application/json","X-API-Key":apiKey};
+      try {
+        const respuesta = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(causa)}/actuaciones`,{headers,signal:AbortSignal.timeout(25000)});
+        if (!respuesta.ok) return res.status(502).json({ok:false,error:"No se pudieron consultar las actuaciones"});
+        const fuente:any = await respuesta.json();
+        const actuaciones = extraerTodasLasActuaciones(fuente);
+        const inventario = await inventariarAdjuntos({causa,baseUrl,headers,actuaciones,offset,limite:8,concurrencia:3,timeoutMs:3000});
+        const parcial = fuente?.success===false || (Array.isArray(fuente?.partialErrors) && fuente.partialErrors.length>0);
+        return res.status(200).json({ok:true,numeroProceso:causa,totalActuaciones:actuaciones.length,actuacionesParciales:parcial,inventario,
+          siguienteOffset:offset+inventario.actuacionesRevisadas<inventario.actuacionesConDocumento ? offset+inventario.actuacionesRevisadas : null,
+          advertencia:parcial?"Actuaciones parciales: no afirmar exhaustividad":"Se inventarian archivos, no se extrae texto de PDF"});
+      } catch { return res.status(504).json({ok:false,error:"SATJE no respondió a tiempo"}); }
     }
 
     // 2. ENDPOINT DE CHAT LEGAL DE IA
