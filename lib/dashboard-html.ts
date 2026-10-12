@@ -1389,7 +1389,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           </div>
           <div class="stat-pill">
             <div class="stat-num danger">${medidasCount}</div>
-            <div class="stat-lbl">Medidas Cautelares</div>
+            <div class="stat-lbl">Grupos de medidas (provisional)</div>
           </div>
           <div class="stat-pill">
             <div class="stat-num">${resolucionesCount}</div>
