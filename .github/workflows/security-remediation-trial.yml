@@ -22,9 +22,9 @@ jobs:
       - run: npm ci
       - name: Upgrade vulnerable direct packages in audit branch
         run: |
-          npm install --save-exact @vercel/node@23.0.1
-          npm install --save-dev --save-exact wrangler@4.86.0
-          npm audit fix || true
+          npm uninstall @vercel/node
+          npm install --save-dev --save-exact wrangler@4.149.0
+          npm audit fix
       - name: TypeScript and unit tests
         run: |
           npm run typecheck
