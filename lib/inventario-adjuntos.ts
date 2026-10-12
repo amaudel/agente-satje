@@ -9,7 +9,8 @@ export async function inventariarAdjuntos(args: {
  causa:string;baseUrl:string;headers:Record<string,string>;actuaciones:any[];
  limite?:number;concurrencia?:number;timeoutMs?:number;offset?:number;
 }):Promise<InventarioAdjuntos>{
- const candidatos=args.actuaciones.filter(a=>a?.tieneDocumento===true && (a?.codigoActuacion||a?.codigo));
+ // Si SATJE no aporta tieneDocumento, comprobar la actuación en vez de asumir que no hay PDFs.
+ const candidatos=args.actuaciones.filter(a=>(a?.codigoActuacion||a?.codigo) && a?.tieneDocumento!==false);
  const limite=Math.max(0,Math.min(args.limite??8,20));
  const offset=Math.max(0,Math.min(Math.floor(args.offset??0),candidatos.length));
  const seleccion=candidatos.slice(offset,offset+limite);
