@@ -16,8 +16,8 @@ test("consulta el backend con el identificador completo, letras incluidas", asyn
   }
   assert.ok(urls.length > 0);
   assert.ok(
-    urls[0].endsWith("/api/v1/causas/01U03202373295/actuaciones"),
-    `la primera consulta debia usar el id con letras y fue ${urls[0]}`
+    urls.some((u) => u.endsWith("/api/v1/causas/01U03202373295/actuaciones")),
+    `debe consultar las actuaciones usando el id con letras; URLs: ${urls.join(", ")}`
   );
   assert.ok(urls.every((u) => !u.includes("01032")), "no debe aparecer el numero deformado");
 });
@@ -92,4 +92,36 @@ test("sin actuaciones no hay fecha de ingreso", async () => {
     const r: any = await procesarCausaIndividual("01333202104334", "https://backend.test", "k");
     assert.equal(r.fechaIngreso, null);
   });
+});
+
+
+test("dos relojes: usa fecha y plazo determinantes del análisis especializado", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("/abandono/riesgo")) return new Response(JSON.stringify({
+      success: true, analysisStatus: "COMPLETE", partial: false,
+      alertaGeneral: { ambitoMasCercano: "proceso_principal", diasRestantes: -863, fechaReferencialAbandono: "2024-06-01" },
+      relojProcesoPrincipal: { ultimaActuacion: { fecha: "2023-11-30" } },
+      relojUnidadDeprecada: { ultimaActuacion: { fecha: "2025-07-21" } },
+    }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, incidentes: [{ nombreJudicatura: "Cuenca", actuaciones: [{ fecha: "2025-03-06", tipo: "CALIFICACION" }] }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const r = await procesarCausaIndividual("01333-2023-10725", "https://backend.test", "k");
+    assert.equal(r.alertaAbandonoObjeto.fechaUltimaActuacion, "2023-11-30");
+    assert.equal(r.alertaAbandonoObjeto.diasRestantes, -863);
+    assert.match(r.alertaAbandonoObjeto.relojDeprecatorioInfo || "", /2025-07-21/);
+  } finally { globalThis.fetch = original; }
+});
+
+test("timeout especializado: advierte que el cálculo local es provisional", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("/abandono/riesgo")) return new Response("timeout", { status: 504 });
+    return new Response(JSON.stringify({ success: true, incidentes: [{ actuaciones: [{ fecha: "2025-03-06", tipo: "CALIFICACION" }] }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const r = await procesarCausaIndividual("01333-2024-12766", "https://backend.test", "k");
+    assert.match(r.alertaAbandonoObjeto.etiqueta, /provisional/);
+  } finally { globalThis.fetch = original; }
 });
