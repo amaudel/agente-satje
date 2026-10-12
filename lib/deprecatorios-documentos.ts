@@ -14,7 +14,7 @@ export async function verificarDocumentosDeprecatorio(args:{
 }):Promise<EvidenciaDeprecatorio> {
   const {baseUrl,causa,codigo,cabeceras,textoActuacion}=args;
   const referencia=`SATJE actuación ${codigo}`;
-  let documentosConsultados=0, documentosFallidos=0, causaEnDocumento=false, partesDiscordantes=false;
+  let documentosConsultados=0, documentosFallidos=0, causaEnDocumento=false, partesDiscordantes=false, actorCoincidente=false;
   let documentos:any[]=[];
   try {
     const r=await jsonLimitado(`${baseUrl}/api/v1/causas/${encodeURIComponent(causa)}/actuaciones/${encodeURIComponent(codigo)}/documentos`,{headers:cabeceras},Math.min(args.maxMs||5000,5000));
@@ -38,12 +38,13 @@ export async function verificarDocumentosDeprecatorio(args:{
       causaEnDocumento ||= contenido.replace(/[^0-9A-Z]/g,"").includes(numero);
       const encontrado=actor(contenido);
       if(esperado && encontrado && esperado!==encontrado) partesDiscordantes=true;
+      if(esperado && encontrado && esperado===encontrado) actorCoincidente=true;
     }catch {documentosFallidos++;}
   }
   const estado:EstadoEvidencia=partesDiscordantes && causaEnDocumento
     ? "DISCREPANCIA_DOCUMENTAL"
     : documentosFallidos ? "DOCUMENTO_INACCESIBLE"
-    : causaEnDocumento && esperado && !partesDiscordantes ? "COINCIDENCIA_DOCUMENTAL"
+    : causaEnDocumento && actorCoincidente && !partesDiscordantes ? "COINCIDENCIA_DOCUMENTAL"
     : "EVIDENCIA_INSUFICIENTE";
   return {estado,causaEnDocumento,partesDiscordantes,documentosConsultados,documentosFallidos,referencia};
 }
