@@ -8,6 +8,7 @@ import {
   calcularAlertaAbandonoProcesal,
 } from "./legal-analysis.js";
 import { verificarIdentidadDeprecatorio } from "./deprecatorios-identidad.js";
+import { verificarDocumentosDeprecatorio } from "./deprecatorios-documentos.js";
 
 // Presupuesto de tiempo por causa. Se reserva margen frente al maxDuration de
 // la funcion serverless (60s) para poder devolver una respuesta en vez de que
@@ -195,6 +196,19 @@ export async function procesarCausaIndividual(
     const general = riesgo.alertaGeneral;
     const verificacion = deprecada ? verificarIdentidadDeprecatorio(actuaciones, String(deprecada?.ultimaActuacion?.actividadResumen || "")) : null;
     const discrepancia = verificacion?.estado === "DISCREPANCIA";
+    const evidenciaDoc = discrepancia && deprecada?.ultimaActuacion?.codigo
+      ? await verificarDocumentosDeprecatorio({
+          baseUrl, causa: causaSinGuiones, codigo: String(deprecada.ultimaActuacion.codigo),
+          cabeceras: headers, actorOrigen: actuaciones.filter((a:any)=>String(a?.nombreJudicatura||"").includes("CUENCA")).map((a:any)=>String(a?.actividad||"")).join(" "),
+          textoActuacion: String(deprecada.ultimaActuacion.actividadResumen||""), maxMs: 4000,
+        }) : null;
+    const avisoDoc = evidenciaDoc?.estado === "DISCREPANCIA_DOCUMENTAL"
+      ? "Discrepancia confirmada en el texto del PDF de SATJE; no determina nulidad del deprecatorio."
+      : evidenciaDoc?.estado === "COINCIDENCIA_DOCUMENTAL"
+      ? "Documento del oficio cotejado: coincide la parte actora y el número de causa, sin acreditar por sí solo la validez."
+      : evidenciaDoc?.estado === "DOCUMENTO_INACCESIBLE"
+      ? "PDF del deprecatorio inaccesible o extracción incompleta; no hay verificación documental concluyente."
+      : discrepancia ? "No se obtuvo evidencia suficiente para aclarar la discrepancia de partes." : "";
     const determinante = general.ambitoMasCercano === "unidad_deprecada" ? deprecada : principal;
     const dias = Number(general.diasRestantes);
     const vencido = dias <= 0;
@@ -209,9 +223,9 @@ export async function procesarCausaIndividual(
         fechaReferencialAbandono: String(general.fechaReferencialAbandono || "N/A"),
         esDeprecatorio: Boolean(deprecada),
         relojDeprecatorioInfo: deprecada
-          ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}. ${discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar: el oficio menciona distinta parte actora. No usar este reloj para conclusiones jurídicas hasta contrastar documentos." : ""}`
+          ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}. ${discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar: el oficio menciona distinta parte actora. ${avisoDoc} No usar este reloj para conclusiones jurídicas definitivas sin validar su efecto procesal." : ""}`
           : undefined,
-        explicacion: discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: el reloj deprecado contiene partes discordantes; no permite concluir el efecto jurídico de esa actuación. Verificar expediente." : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
+        explicacion: discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: las partes del deprecatorio presentan discordancias. ${avisoDoc} El efecto procesal debe evaluarse por separado." : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
       };
     }
   } else if (alertaLocal.nivel !== "abandonada" && alertaLocal.nivel !== "improcedente") {
