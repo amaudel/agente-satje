@@ -230,8 +230,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         var items=Object.values(state.items);
         var errors=items.filter(function(x){return !!x.error;}).length;
         var files=items.reduce(function(n,x){return n+(x.cantidad||0);},0);
-        output.textContent='Revisadas '+items.length+' de '+(state.total===null?'?':state.total)+
-          ' actuaciones. Archivos localizados: '+files+'. Consultas fallidas: '+errors+
+        output.textContent='Posiciones recorridas: '+state.offset+' de '+(state.total===null?'?':state.total)+'. Códigos distintos con resultado: '+items.length+'. Archivos localizados: '+files+'. Consultas fallidas: '+errors+
           '. Siguiente posición: '+state.offset+'.';
       }
       function save() {try { sessionStorage.setItem(key,JSON.stringify(state)); }catch (_) {}}
@@ -256,6 +255,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           if(result.actuacionesParciales) state.parcial=true;
           inv.referencias.forEach(function(item){state.items[item.codigo]=item;});
           if(result.siguienteOffset===null) {
+            state.offset=state.total;
             state.terminado=true;
             save();resumen();break;
           }
@@ -265,7 +265,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           await new Promise(function(resolve){setTimeout(resolve,300);});
         }
         var items=Object.values(state.items);
-        var complete=state.terminado && items.length===state.total && !state.parcial && items.every(function(x){return !x.error;});
+        var complete=state.terminado && state.offset>=state.total && !state.parcial && items.length===state.total && items.every(function(x){return !x.error;});
         output.textContent += complete?' Inventario de adjuntos finalizado; PDF leídos en este inventario: 0.':
           ' Inventario parcial o con errores. Puedes volver a pulsar para reanudar si fue interrumpido.';
       }catch(e) {
@@ -290,7 +290,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         for(var i=0;i<failed.length;i+=4){
           var group=failed.slice(i,i+4);
           var response=await fetch('/?action=inventario-adjuntos&causa='+encodeURIComponent(causa)+'&codigos='+encodeURIComponent(group.join(',')),{headers:{Accept:'application/json'}});
-          if(!response.ok) throw new Error('HTTP '+response.status);
+          if(!response.ok) { var detail=''; try {var failure=await response.json(); detail=failure.error||'';}catch(_){} throw new Error('HTTP '+response.status+(detail?': '+detail:'')); }
           var result=await response.json();
           if(!result.ok) throw new Error(result.error||'Consulta fallida');
           result.inventario.referencias.forEach(function(item){
