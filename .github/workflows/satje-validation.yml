@@ -43,7 +43,7 @@ jobs:
         continue-on-error: true
         run: |
           npm uninstall @vercel/node
-          npm install --save-dev --save-exact wrangler@4.149.0
+          npm install --save-dev --save-exact @cloudflare/workers-types@5.20261006.1 wrangler@4.149.0
           npm audit fix
           npm ls @vercel/node wrangler --depth=0
           npm run typecheck
