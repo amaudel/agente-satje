@@ -243,7 +243,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!respuesta.ok) return res.status(502).json({ok:false,error:"No se pudieron consultar las actuaciones"});
         const fuente:any = await respuesta.json();
         const actuaciones = extraerTodasLasActuaciones(fuente);
-        const inventario = await inventariarAdjuntos({causa,baseUrl,headers,actuaciones,offset,limite:8,concurrencia:3,timeoutMs:3000});
+        const inventario = await inventariarAdjuntos({causa,baseUrl,headers,actuaciones,offset,limite:4,concurrencia:1,timeoutMs:4500});
         const parcial = fuente?.success===false || (Array.isArray(fuente?.partialErrors) && fuente.partialErrors.length>0);
         return res.status(200).json({ok:true,numeroProceso:causa,totalActuaciones:actuaciones.length,actuacionesParciales:parcial,inventario,
           siguienteOffset:offset+inventario.actuacionesRevisadas<inventario.actuacionesConDocumento ? offset+inventario.actuacionesRevisadas : null,
