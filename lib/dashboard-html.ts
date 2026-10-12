@@ -222,34 +222,56 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       if (!output || output.dataset.running === '1') return;
       output.dataset.running = '1';
       var causa = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
-      var offset = 0, revisadas = 0, encontrados = 0, fallos = 0, total = null, parciales = false, visto = {};
+      var key = 'satje-inventario-v2:' + causa;
+      var state = {offset:0,total:null,items:{},parcial:false,terminado:false};
+      try { var saved = sessionStorage.getItem(key); if(saved) state = JSON.parse(saved); } catch (_) {}
+      if(state.terminado) state = {offset:0,total:null,items:{},parcial:false,terminado:false};
+      function resumen() {
+        var items=Object.values(state.items);
+        var errors=items.filter(function(x){return !!x.error;}).length;
+        var files=items.reduce(function(n,x){return n+(x.cantidad||0);},0);
+        output.textContent='Revisadas '+items.length+' de '+(state.total===null?'?':state.total)+
+          ' actuaciones. Archivos localizados: '+files+'. Consultas fallidas: '+errors+
+          '. Siguiente posición: '+state.offset+'.';
+      }
+      function save() {try { sessionStorage.setItem(key,JSON.stringify(state)); }catch (_) {}}
       try {
-        for (var pagina = 0; pagina < 150; pagina++) {
-          var response = await fetch('/?action=inventario-adjuntos&causa=' + encodeURIComponent(causa) + '&offset=' + offset, {headers:{Accept:'application/json'}});
-          if (!response.ok) throw new Error('HTTP ' + response.status);
-          var result = await response.json();
-          if (!result.ok) throw new Error(result.error || 'Sin respuesta');
-          var inv = result.inventario;
-          if (total === null) total = inv.actuacionesConDocumento;
-          if (total !== inv.actuacionesConDocumento || result.actuacionesParciales) parciales = true;
-          for (var j=0; j<inv.referencias.length; j++) {
-            var item=inv.referencias[j];
-            if (visto[item.codigo]) {parciales=true;continue;}
-            visto[item.codigo]=true;
-            revisadas++;
-            encontrados+=item.cantidad;
-            if (item.error) fallos++;
+        for(var page=0;page<150;page++) {
+          var result=null;
+          for(var retry=0;retry<3;retry++) {
+            try {
+              var response=await fetch('/?action=inventario-adjuntos&causa='+encodeURIComponent(causa)+'&offset='+state.offset,{headers:{Accept:'application/json'}});
+              if (!response.ok) throw new Error('HTTP '+response.status);
+              result=await response.json();
+              if(!result.ok) throw new Error(result.error||'SATJE sin respuesta');
+              break;
+            } catch(error) {
+              if(retry===2) throw error;
+              await new Promise(function(resolve){setTimeout(resolve,600*(2**retry));});
+            }
           }
-          output.textContent = 'Revisadas ' + revisadas + ' de ' + total + ' actuaciones con adjuntos. Archivos localizados: ' + encontrados + '. Consultas fallidas: ' + fallos + '.';
-          if (result.siguienteOffset === null) break;
-          if (result.siguienteOffset <= offset) throw new Error('Paginación sin avance');
-          offset = result.siguienteOffset;
+          var inv=result.inventario;
+          if(state.total!==null && state.total!==inv.actuacionesConDocumento) state.parcial=true;
+          state.total=inv.actuacionesConDocumento;
+          if(result.actuacionesParciales) state.parcial=true;
+          inv.referencias.forEach(function(item){state.items[item.codigo]=item;});
+          if(result.siguienteOffset===null) {
+            state.terminado=true;
+            save();resumen();break;
+          }
+          if(result.siguienteOffset<=state.offset) throw new Error('Paginación sin avance');
+          state.offset=result.siguienteOffset;
+          save();resumen();
+          await new Promise(function(resolve){setTimeout(resolve,300);});
         }
-        var completa = total !== null && revisadas === total && fallos === 0 && !parciales;
-        output.textContent += completa ? ' Inventario de adjuntos consultados completo; PDF leídos: 0.' : ' Inventario parcial o con errores. No se puede afirmar cobertura exhaustiva.';
-      } catch(e) {
-        output.textContent += ' Inventario interrumpido: ' + String(e.message || e) + '. Resultado parcial.';
-      } finally {output.dataset.running = '0';}
+        var items=Object.values(state.items);
+        var complete=state.terminado && items.length===state.total && !state.parcial && items.every(function(x){return !x.error;});
+        output.textContent += complete?' Inventario de adjuntos finalizado; PDF leídos en este inventario: 0.':
+          ' Inventario parcial o con errores. Puedes volver a pulsar para reanudar si fue interrumpido.';
+      }catch(e) {
+        save();resumen();
+        output.textContent+=' Pausado por '+String(e.message||e)+'. Pulsa nuevamente para reanudar.';
+      }finally {output.dataset.running='0';}
     };
 
     window.cargarResumenIA = function() {
