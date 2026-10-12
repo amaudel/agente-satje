@@ -274,6 +274,40 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       }finally {output.dataset.running='0';}
     };
 
+    window.reintentarFallidosSATJE = async function() {
+      var output=document.getElementById('inventarioSatjeProgreso');
+      if(!output || output.dataset.running==='1') return;
+      output.dataset.running='1';
+      var causa=new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      var key='satje-inventario-v2:'+causa;
+      var state;
+      try {state=JSON.parse(sessionStorage.getItem(key)||'null');}catch(_){}
+      if(!state || !state.items) {output.textContent='Primero ejecuta el inventario.';output.dataset.running='0';return;}
+      var failed=Object.values(state.items).filter(function(x){return !!x.error;}).map(function(x){return String(x.codigo);});
+      if(!failed.length) {output.textContent='No hay consultas fallidas guardadas.';output.dataset.running='0';return;}
+      var repaired=0;
+      try {
+        for(var i=0;i<failed.length;i+=4){
+          var group=failed.slice(i,i+4);
+          var response=await fetch('/?action=inventario-adjuntos&causa='+encodeURIComponent(causa)+'&codigos='+encodeURIComponent(group.join(',')),{headers:{Accept:'application/json'}});
+          if(!response.ok) throw new Error('HTTP '+response.status);
+          var result=await response.json();
+          if(!result.ok) throw new Error(result.error||'Consulta fallida');
+          result.inventario.referencias.forEach(function(item){
+            if(!item.error && state.items[item.codigo]?.error) repaired++;
+            state.items[item.codigo]=item;
+          });
+          sessionStorage.setItem(key,JSON.stringify(state));
+          output.textContent='Recuperadas '+repaired+' de '+failed.length+' consultas fallidas originales.';
+          await new Promise(function(resolve){setTimeout(resolve,600);});
+        }
+        var pending=Object.values(state.items).filter(function(x){return !!x.error;}).length;
+        output.textContent+=' Persisten '+pending+' consultas fallidas. Los PDF no se han leído.';
+      } catch(e) {
+        output.textContent+=' Recuperación interrumpida: '+String(e.message||e)+'. Se conservaron los resultados; puedes reintentar.';
+      } finally {output.dataset.running='0';}
+    };
+
     window.cargarResumenIA = function() {
       var box = document.getElementById('resumenIaText');
       if (!box) return;
@@ -1476,6 +1510,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <div class="card-title">📚 Inventario incremental del expediente</div>
           <p>Recorre los adjuntos de todas las actuaciones por lotes y muestra el resultado acumulado. No extrae texto de PDF.</p>
           <button type="button" class="btn-copy" onclick="window.iniciarInventarioSATJE()">Revisar todas las actuaciones con adjuntos</button>
+          <button type="button" class="btn-copy" onclick="window.reintentarFallidosSATJE()">Reintentar únicamente consultas fallidas</button>
           <div id="inventarioSatjeProgreso" role="status" aria-live="polite">Listo para iniciar.</div>
         </div>` : ''}
         <!-- INFORME DE INTELIGENCIA ARTIFICIAL CON BOTÓN DE COPIAR -->
