@@ -497,7 +497,6 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
          textoStr.includes("quedo inscrita") || textoStr.includes("quedó inscrita") || textoStr.includes("se procedio a inscribir") || textoStr.includes("inscrito el") || textoStr.includes("inscrita el") || textoStr.includes("correspondiente a la presente fecha") || textoStr.includes("contestacion de oficios"));
 
       if (esRespuestaRegistral) {
-        me.estadoCicloVida = "INSCRIPCION_CONFIRMADA";
         me.fechaActuacionSatje = fechaLimpia;
         me.fuente = {
           tipoActuacion: tipoAct || "RAZÓN / OFICIO REGISTRAL",
@@ -531,12 +530,14 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
           // agrega (criterio de la oficial juridica).
           const presentacion = presentacionDelOficioRegistral(actuacionesOrdenadas, act, me.fechaOficio);
           if (presentacion) {
-            me.fechaInscripcion = presentacion;
-            me.confianza = "MEDIA";
+            // Presentación de un oficio ≠ fecha de inscripción del gravamen.
+            me.fechaInscripcion = null;
+            me.confianza = "BAJA";
             me.evidenciaTextual = `Oficio del Registro presentado el ${presentacion}; el juez lo agregó al proceso el ${fechaLimpia}.`;
           } else {
-            me.fechaInscripcion = fechaLimpia;
-            me.confianza = "MEDIA";
+            // La fecha de publicación en SATJE no acredita inscripción registral.
+            me.fechaInscripcion = null;
+            me.confianza = "BAJA";
             me.evidenciaTextual = `"${actividad.slice(0, 260)}..."`;
           }
         }
@@ -545,8 +546,11 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
           me.numeroRepertorio = matchRepertorio[1];
         }
 
-        me.observacion = "Inscripción confirmada mediante Razón de Inscripción del Registro de la Propiedad incorporada a SATJE.";
-        me.recomendacionEstrategica = "Medida cautelar activa y perfeccionada. Proceder con las siguientes etapas de evaluación de garantías o ejecución.";
+        me.estadoCicloVida = me.fechaInscripcion ? "INSCRIPCION_CONFIRMADA" : "INSCRIPCION_NO_CONFIRMADA";
+        me.observacion = me.fechaInscripcion
+          ? "Se identificó texto de inscripción registral; verificar certificado y correspondencia con esta medida."
+          : "Hay respuesta u oficio registral, pero no consta fecha de inscripción acreditada.";
+        me.recomendacionEstrategica = "Verificar el certificado registral y la relación con esta causa antes de afirmar inscripción o sugerir ejecución.";
       }
     }
 
@@ -556,9 +560,10 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
       textoStr.includes("dejese sin efecto la prohibicion") || textoStr.includes("déjese sin efecto la prohibición");
 
     if (esLevantamiento) {
-      me.estadoCicloVida = "LEVANTADA";
-      me.fechaLevantamiento = fechaLimpia;
-      me.observacion = "Se registra providencia u oficio de levantamiento / cancelación de la medida cautelar.";
+      // Orden de levantar no significa que el Registro haya cancelado el gravamen.
+      me.estadoCicloVida = "INSCRIPCION_NO_CONFIRMADA";
+      me.fechaLevantamiento = null;
+      me.observacion = "Se detectó referencia a levantamiento; comprobar constancia registral de cancelación.";
       me.recomendacionEstrategica = "Verificar cancelación en el certificado de gravámenes actualizado del Registro correspondiente.";
     }
   }
@@ -678,8 +683,14 @@ export function calcularAlertaAbandonoProcesal(actuaciones: any[], poseeSentenci
   }
 
   if (!fechaMasReciente) {
-    fechaMasReciente = new Date();
-    fechaUltimaStr = fechaMasReciente.toISOString().split("T")[0];
+    // Nunca hacer pasar la fecha de hoy por la última actuación.
+    return {
+      nivel: 'normal', etiqueta: '⚪ No determinable', badgeClass: 'muted',
+      diasRestantes: 0, porcentajeGauge: 0, fechaUltimaActuacion: 'N/A',
+      fechaReferencialAbandono: 'N/A',
+      explicacion: 'No se identificó actuación útil para calcular un plazo. Revisión manual necesaria.',
+      esDeprecatorio: esDeprecatorioDetectado,
+    };
   }
 
   const fechaAbandono = new Date(fechaMasReciente);
@@ -729,7 +740,7 @@ export function calcularAlertaAbandonoProcesal(actuaciones: any[], poseeSentenci
     fechaReferencialAbandono: fechaAbandonoStr,
     explicacion,
     esDeprecatorio: esDeprecatorioDetectado,
-    relojDeprecatorioInfo: esDeprecatorioDetectado ? '⚡ Doble Reloj Activo (Monitoreo Unidad Principal + Judicatura Deprecada).' : undefined,
+    relojDeprecatorioInfo: esDeprecatorioDetectado ? 'Hay deprecatorios: cálculo local no separa ambos relojes. Consultar el análisis especializado antes de tomar decisiones.' : undefined,
   };
 }
 
