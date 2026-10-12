@@ -1228,10 +1228,10 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <div class="kpi-card ${poseeSentencia ? 'sentencia-si' : 'sentencia-no'}">
             <div>
               <div class="kpi-tag ${poseeSentencia ? 'success' : 'warning'}">
-                ${poseeSentencia ? '🟢 Sentencia Emitida' : '🔴 Sin Sentencia Emitida'}
+                ${poseeSentencia ? '🟢 Sentencia Emitida' : '⚠️ Sentencia no confirmada'}
               </div>
               <div class="kpi-main-title">
-                ${poseeSentencia ? 'Sentencia Emitida en la Causa' : 'Sin Sentencia Dictada'}
+                ${poseeSentencia ? 'Sentencia Emitida en la Causa' : 'Sin sentencia detectada'}
               </div>
             </div>
             <div>
@@ -1407,9 +1407,9 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         ${cobertura ? `
         <div class="card" role="region" aria-label="Cobertura y fuentes del análisis">
           <div class="card-title">📋 Cobertura y fuentes del análisis judicial</div>
-          <p><strong>Actuaciones recuperadas:</strong> ${escapeHtml(cobertura.actuacionesRecuperadas)}.
+          <p><strong>Actuaciones recuperadas:</strong> ${escapeHtml(cobertura.actuacionesRecuperadas)}. <strong>Incidentes identificados:</strong> ${escapeHtml(cobertura.incidentesIdentificados ?? "No disponible")}.
           <strong>Información parcial:</strong> ${cobertura.actuacionesParciales ? 'Sí, revisar faltantes' : 'Sin errores parciales informados'}.</p>
-          <p><strong>Documentos PDF:</strong> No inventariados de forma exhaustiva. Cobertura de lectura: desconocida.</p>
+          <p><strong>Actuaciones marcadas con adjunto:</strong> ${escapeHtml(cobertura.actuacionesConAdjuntoMarcado ?? "No disponible")}. <strong>Documentos PDF:</strong> No inventariados de forma exhaustiva; cantidad y lectura total desconocidas.</p>
           <p><strong>Sentencia:</strong> ${escapeHtml(estadoSentencia)} · Fuente: ${escapeHtml(fuenteSentencia)}.</p>
           <p><strong>Medidas cautelares:</strong> ${escapeHtml(estadoMedidas)} · Fuente: ${escapeHtml(fuenteMedidas)}.</p>
           <p style="font-size:12px;opacity:.85;">Los análisis especializados se limitan a su cobertura y no sustituyen la lectura íntegra de los documentos ni la revisión jurídica.</p>
