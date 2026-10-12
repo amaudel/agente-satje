@@ -27,7 +27,8 @@ export function agruparMedidasCautelares(actuaciones: any[]): {
       /\bRETENCION\s+DE\s+(FONDOS|CUENTAS|VALORES)\b/.test(texto) ? "RETENCION" : null;
     if (!tipo) continue;
     // Menciones en notificaciones siguen siendo evidencia, pero no nueva medida.
-    const match = texto.match(/\b(?:CERTIFICADO|PREDIO|INMUEBLE|PLACA)\s*(?:N(?:RO|UMERO)?\.?\s*|NO\.?\s*|#\s*)?([A-Z0-9][A-Z0-9.\/-]{2,})\b/);
+    const match = texto.match(/\\bCERTIFICADO\\s*(?:N(?:RO|UMERO)?\\.?\\s*|NO\\.?\\s*|#\\s*)?([0-9][0-9.\\/-]{2,})\\b/)
+      || texto.match(/\\b(?:PREDIO|INMUEBLE|PLACA)\\s*(?:N(?:RO|UMERO)?\\.?\\s*|NO\\.?\\s*|#\\s*)?([A-Z0-9][A-Z0-9.\\/-]{2,})\\b/);
     const ref = match ? match[1].replace(/\.$/, "") : null;
     if (!ref) sinIdentificador = true;
     const clave = tipo + ":" + (ref || "SIN_IDENTIFICADOR");
