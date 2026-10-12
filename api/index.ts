@@ -133,6 +133,14 @@ Analiza las actuaciones y responde con precisión:
     ? `VERIFICACIÓN DE DEPRECATORIO: ${ed.estado}. Actuación SATJE ${ed.codigoActuacion}; fecha ${ed.fechaActuacion}; referencia ${ed.documentoReferencia}. Documentos leídos: ${ed.documentosConsultados}, fallidos: ${ed.documentosFallidos}. La discrepancia documental no implica automáticamente nulidad ni determina el efecto jurídico de la actuación.`
     : "";
   const respuesta = notaDocumento ? `${notaDocumento}\n\n${respuestaModelo}` : respuestaModelo;
+  // No convertir una alerta preventiva en auto judicial de abandono sin evidencia.
+  const falsaDeclaratoria = /(?:se ha declarado (?:un )?(?:auto de )?abandono|se declar[oó] (?:un )?(?:auto de )?abandono|(?:consta|existe|se registr[oó]|se dict[oó]) (?:un |el )?auto de abandono|(?:el proceso|la causa|el juicio) (?:fue|ha sido|est[aá]) (?:declarado |declarada )?en abandono)/i.test(respuesta);
+  const sentenciaAbandonoConfirmada = resultado.alertaAbandonoObjeto?.nivel === "abandonada";
+  if (falsaDeclaratoria && !sentenciaAbandonoConfirmada) {
+    return "⚠️ RESUMEN AUTOMÁTICO NO CONCLUYENTE: el modelo afirmó una declaratoria o auto judicial de abandono sin evidencia verificada en el análisis especializado. Se ha omitido el texto para evitar un diagnóstico jurídico incorrecto. Consulte las actuaciones y documentos originales.\\n\\n" +
+      (notaDocumento ? notaDocumento + "\\n\\n" : "") +
+      "Estado preventivo SATJE: " + resultado.alertaAbandono + " (" + resultado.diasRestantesAbandono + " días referenciales). Esta alerta no constituye una declaratoria judicial.";
+  }
   const alerta = resultado.alertaAbandonoObjeto;
   const vencido = alerta?.nivel === "vencido" || (typeof alerta?.diasRestantes === "number" && alerta.diasRestantes < 0);
   if (!vencido) return respuesta;
