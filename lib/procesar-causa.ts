@@ -40,6 +40,22 @@ export async function procesarCausaIndividual(
     ...(apiKey ? { "X-API-Key": apiKey } : {}),
   };
 
+  // El backend especializado separa proceso principal y unidad deprecada.
+  // Se inicia en paralelo para no extender el presupuesto de la consulta.
+  const riesgoEspecializadoPromise = (async (): Promise<any | null> => {
+    if (!causaSinGuiones) return null;
+    try {
+      const res = await fetch(
+        `${baseUrl}/api/v1/causas/${encodeURIComponent(causaSinGuiones)}/abandono/riesgo`,
+        { headers, signal: AbortSignal.timeout(30000) }
+      );
+      if (!res.ok) return null;
+      const data: any = await res.json();
+      return data?.success === true && data?.analysisStatus === "COMPLETE" && data?.partial === false
+        ? data : null;
+    } catch { return null; }
+  })();
+
   const inicio = Date.now();
   const fin = inicio + Math.max(MIN_TIMEOUT_MS, Math.min(presupuestoMs, PRESUPUESTO_POR_CAUSA_MS));
   const restante = () => Math.max(0, fin - Date.now());
@@ -169,7 +185,39 @@ export async function procesarCausaIndividual(
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
   const cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
-  const alertaAbandono = calcularAlertaAbandonoProcesal(actuaciones, analisisSentencia.poseeSentencia);
+  const alertaLocal = calcularAlertaAbandonoProcesal(actuaciones, analisisSentencia.poseeSentencia);
+  const riesgo = await riesgoEspecializadoPromise;
+  let alertaAbandono = alertaLocal;
+  if (riesgo?.alertaGeneral && riesgo?.relojProcesoPrincipal) {
+    const principal = riesgo.relojProcesoPrincipal;
+    const deprecada = riesgo.relojUnidadDeprecada;
+    const general = riesgo.alertaGeneral;
+    const determinante = general.ambitoMasCercano === "unidad_deprecada" ? deprecada : principal;
+    const dias = Number(general.diasRestantes);
+    const vencido = dias <= 0;
+    if (Number.isFinite(dias)) {
+      alertaAbandono = {
+        ...alertaLocal,
+        nivel: vencido ? "vencido" : dias <= 30 ? "critico" : dias <= 60 ? "alerta" : "normal",
+        etiqueta: vencido ? "🟣 VENCIDO (Alerta preventiva)" : dias <= 30 ? "🔴 Riesgo crítico" : "🟡 Vigilancia preventiva",
+        diasRestantes: dias,
+        porcentajeGauge: Math.max(0, Math.min(100, Math.round(dias / 180 * 100))),
+        fechaUltimaActuacion: String(determinante?.ultimaActuacion?.fecha || "N/A"),
+        fechaReferencialAbandono: String(general.fechaReferencialAbandono || "N/A"),
+        esDeprecatorio: Boolean(deprecada),
+        relojDeprecatorioInfo: deprecada
+          ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}.`
+          : undefined,
+        explicacion: "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
+      };
+    }
+  } else if (alertaLocal.nivel !== "abandonada" && alertaLocal.nivel !== "improcedente") {
+    alertaAbandono = {
+      ...alertaLocal,
+      etiqueta: "⚠️ Cálculo local provisional (API especializada no disponible)",
+      explicacion: "No fue posible verificar ambos relojes de abandono con la API especializada. Los días del cálculo local NO deben usarse para decidir actuaciones judiciales.",
+    };
+  }
 
   return {
     causa: causaFormateada,
