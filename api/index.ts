@@ -953,17 +953,10 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           3
         );
 
-        // Si la causa actual no tiene fecha de inscripción confirmada, intentar recuperar fecha de razones similares en Upstash Vector DB
-        if (!resultadoIndividual.fechaInscripcionMedida) {
-          const matchRegistral = queryMedidas.find(r => r.metadata?.fechaInscripcion && r.score >= 0.78);
-          if (matchRegistral && matchRegistral.metadata?.fechaInscripcion) {
-            resultadoIndividual.fechaInscripcionMedida = matchRegistral.metadata.fechaInscripcion;
-            cautelarData.fechaInscripcion = matchRegistral.metadata.fechaInscripcion;
-            cautelarData.confianza = "ALTA";
-            cautelarData.observacion += ` [Recuperado vía Upstash Vector RAG desde Causa ${matchRegistral.metadata.causa}]`;
-            vectorDbStatus.recuperacionMedidaRag = true;
-          }
-        }
+        // Seguridad probatoria: la similitud semántica con OTRA causa nunca acredita
+        // la inscripción de una medida en el expediente consultado.
+        // Upstash se utiliza solo como referencia contextual; no modifica fechas,
+        // estados registrales ni niveles de confianza del resultado SATJE.
 
         // Indexar la Medida Cautelar dedicada en Upstash Vector DB
         await upsertUpstashVector(upstashUrl, upstashToken, {
