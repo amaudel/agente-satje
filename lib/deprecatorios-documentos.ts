@@ -3,9 +3,17 @@ export interface EvidenciaDeprecatorio { estado: EstadoEvidencia; causaEnDocumen
 const norm = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase();
 const actor = (v: string) => norm(v).match(/COOPERATIVA DE AHORRO Y CREDITO\s+([A-Z0-9 ]{2,50}?)\s+LTDA\b/)?.[1]?.trim() || null;
 async function jsonLimitado(url:string, options:RequestInit, ms:number):Promise<any> {
-  const res=await fetch(url,{...options,signal:AbortSignal.timeout(ms)});
-  if(!res.ok) throw new Error("HTTP "+res.status);
-  return res.json();
+  // Dos intentos breves cuando SATJE da 504/timeout, sin retener la función indefinidamente.
+  let ultimo: unknown;
+  for(let intento=0; intento<2; intento++) {
+    try {
+      const res=await fetch(url,{...options,signal:AbortSignal.timeout(ms)});
+      if(res.ok) return res.json();
+      if(res.status!==502 && res.status!==503 && res.status!==504) throw new Error("HTTP "+res.status);
+      ultimo=new Error("HTTP "+res.status);
+    }catch(e){ultimo=e;}
+  }
+  throw ultimo ?? new Error("Documento inaccesible");
 }
 /** Verifica el documento original; nunca declara validez o nulidad procesal. */
 export async function verificarDocumentosDeprecatorio(args:{
