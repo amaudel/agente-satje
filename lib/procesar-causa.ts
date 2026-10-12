@@ -9,6 +9,7 @@ import {
 } from "./legal-analysis.js";
 import { verificarIdentidadDeprecatorio } from "./deprecatorios-identidad.js";
 import { verificarDocumentosDeprecatorio } from "./deprecatorios-documentos.js";
+import { inventariarAdjuntos } from "./inventario-adjuntos.js";
 
 // Presupuesto de tiempo por causa. Se reserva margen frente al maxDuration de
 // la funcion serverless (60s) para poder devolver una respuesta en vez de que
@@ -197,6 +198,7 @@ export async function procesarCausaIndividual(
     if (m && (fechaIngreso === null || m[1] < fechaIngreso)) fechaIngreso = m[1];
   }
 
+  const inventarioPromise = inventariarAdjuntos({causa:causaSinGuiones,baseUrl,headers,actuaciones,limite:8,concurrencia:3,timeoutMs:3000});
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
   const cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
@@ -206,16 +208,18 @@ export async function procesarCausaIndividual(
     sentencia: sentenciaEspecializada ? { fuente: "SATJE especializado", estado: "CONFIRMADO_POR_SERVICIO", determinacion: String(sentenciaEspecializada.determination || ""), resumen: sentenciaEspecializada.summary } : { fuente: "reglas locales", estado: "NO_DETERMINABLE", determinacion: "SERVICIO_NO_DISPONIBLE" },
     cautelares: medidasEspecializadas ? { fuente: "SATJE especializado", estado: "CONFIRMADO_POR_SERVICIO", determinacion: String(medidasEspecializadas.determination || ""), resumen: medidasEspecializadas.summary } : { fuente: "agrupacion local no exhaustiva", estado: "NO_DETERMINABLE", determinacion: "SERVICIO_NO_DISPONIBLE" },
   };
+  const inventario = await inventarioPromise;
   const cobertura = {
     actuacionesRecuperadas: actuaciones.length,
     actuacionesConAdjuntoMarcado: actuaciones.filter((a:any) => a?.tieneDocumento === true).length,
     actuacionesSinAdjuntoMarcado: actuaciones.filter((a:any) => a?.tieneDocumento === false).length,
     incidentesIdentificados: new Set(actuaciones.map((a:any) => String(a?.idIncidenteJudicatura || "")).filter(Boolean)).size,
     actuacionesParciales: erroresParciales.length > 0 || Boolean(backendError),
-    documentosInventariados: false,
+    documentosInventariados: inventario.estado === "COMPLETO",
+    inventario,
     documentosLeidos: null as number | null,
-    documentosTotales: null as number | null,
-    advertencia: "El campo tieneDocumento solo indica existencia de adjuntos, no cantidad de PDF ni lectura exitosa. Total de PDF no inventariado; cobertura documental desconocida.",
+    documentosTotales: inventario.estado === "COMPLETO" ? inventario.documentosEncontrados : null as number | null,
+    advertencia: inventario.estado === "COMPLETO" ? "Adjuntos inventariados, pero PDFs no leídos integralmente." : "Inventario parcial de adjuntos: no inferir cantidad total de PDF ni completitud documental.",
   };
   const riesgo = await riesgoEspecializadoPromise;
   let alertaAbandono = alertaLocal;
