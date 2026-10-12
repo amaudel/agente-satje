@@ -31,6 +31,8 @@ export async function verificarDocumentosDeprecatorio(args:{
     return {estado:"DOCUMENTO_INACCESIBLE",causaEnDocumento,partesDiscordantes,documentosConsultados,documentosFallidos:1,referencia};
   }
   if(!documentos.length) return {estado:"EVIDENCIA_INSUFICIENTE",causaEnDocumento,partesDiscordantes,documentosConsultados,documentosFallidos,referencia};
+  const referenciasAdjuntos = documentos.map(d => String(d?.nombreArchivo || d?.documentoId || "sin-identificador")).join(", ");
+  const referenciaDocumento = `${referencia}; adjuntos SATJE: ${referenciasAdjuntos}`;
   const textoOriginal=norm(args.actorOrigen);
   const esperado=actor(textoOriginal);
   for(const doc of documentos) {
@@ -54,5 +56,5 @@ export async function verificarDocumentosDeprecatorio(args:{
     : documentosFallidos ? "DOCUMENTO_INACCESIBLE"
     : causaEnDocumento && actorCoincidente && !partesDiscordantes ? "COINCIDENCIA_DOCUMENTAL"
     : "EVIDENCIA_INSUFICIENTE";
-  return {estado,causaEnDocumento,partesDiscordantes,documentosConsultados,documentosFallidos,referencia};
+  return {estado,causaEnDocumento,partesDiscordantes,documentosConsultados,documentosFallidos,referencia:referenciaDocumento};
 }
