@@ -228,7 +228,7 @@ describe("detectorCicloVidaMedidaCautelar", () => {
   // propiedad", el sistema le pegaba a CUALQUIER causa la fecha, oficio y
   // repertorio de un caso ajeno con confianza ALTA. Debe caer a MEDIA con la
   // fecha de la actuación, no inventar un repertorio de otro expediente.
-  test("respuesta registral sin fecha extraible cae a confianza MEDIA (no inventa datos de otro caso)", () => {
+  test("respuesta registral sin fecha no confirma inscripción", () => {
     const r = detectorCicloVidaMedidaCautelar([
       actuacion({ actividad: "Embargo de bien inmueble ordenado por el juez.", fecha: "2025-01-10" }),
       actuacion({
@@ -237,20 +237,20 @@ describe("detectorCicloVidaMedidaCautelar", () => {
         fecha: "2025-03-03",
       }),
     ]);
-    assert.equal(r.estadoCicloVida, "INSCRIPCION_CONFIRMADA");
-    assert.equal(r.confianza, "MEDIA");
-    assert.equal(r.fechaInscripcion, "2025-03-03");
+    assert.equal(r.estadoCicloVida, "INSCRIPCION_NO_CONFIRMADA");
+    assert.equal(r.confianza, "BAJA");
+    assert.equal(r.fechaInscripcion, null);
     assert.equal(r.numeroRepertorio, null);
     assert.doesNotMatch(r.evidenciaTextual, /969488|23696/);
   });
 
-  test("levantamiento marca estado LEVANTADA", () => {
+  test("orden de levantamiento no acredita cancelación registral", () => {
     const r = detectorCicloVidaMedidaCautelar([
       actuacion({ actividad: "Embargo de bien inmueble ordenado por el juez.", fecha: "2025-01-10" }),
       actuacion({ actividad: "Se dispone el levantamiento del embargo.", fecha: "2025-06-01" }),
     ]);
-    assert.equal(r.estadoCicloVida, "LEVANTADA");
-    assert.equal(r.fechaLevantamiento, "2025-06-01");
+    assert.equal(r.estadoCicloVida, "INSCRIPCION_NO_CONFIRMADA");
+    assert.equal(r.fechaLevantamiento, null);
   });
 });
 
@@ -323,7 +323,7 @@ describe("calcularAlertaAbandonoProcesal", () => {
     const hoy = new Date().toISOString().slice(0, 10);
     const r = calcularAlertaAbandonoProcesal([actuacion({ fecha: hoy, actividad: "Diligencia deprecatorio virtual." })], false);
     assert.equal(r.esDeprecatorio, true);
-    assert.match(r.relojDeprecatorioInfo || "", /Doble Reloj/);
+    assert.match(r.relojDeprecatorioInfo || "", /no separa ambos relojes/);
   });
 
   // Regresion reportada en produccion: un caso realmente abandonado mostraba
@@ -626,7 +626,7 @@ describe("abandono declarado detectado por el tipo de actuacion", () => {
   });
 });
 
-describe("fecha de inscripcion: la del escrito con el oficio del Registro, no la de la providencia que lo agrega", () => {
+describe("fecha de inscripción exige evidencia registral, no fecha de escritos", () => {
   const f = (d: string) => `${d}T10:00:00.000+00:00`;
   // Caso real revisado con la oficial (sin nombres): orden 20-nov-2024, oficio 5-dic,
   // el oficio del Registro se presenta el 17-dic y el juez lo agrega al proceso el 7-ene-2025.
@@ -637,26 +637,26 @@ describe("fecha de inscripcion: la del escrito con el oficio del Registro, no la
     { codigo: 4, fecha: f("2025-01-07"), tipo: "PROVEER ESCRITO (AUTO DE SUSTANCIACION)", actividad: "VISTOS: Agréguese a los autos el oficio del Registro de la Propiedad del cantón Huamboya, que comunica el cumplimiento de la inscripción de la prohibición de enajenar." },
   ];
 
-  test("toma la fecha de presentacion del oficio del Registro (17-dic), no la de la providencia (7-ene)", () => {
+  test("no infiere fecha de inscripción a partir de presentación o providencia", () => {
     const r = detectorCicloVidaMedidaCautelar(caso);
     assert.equal(r.fechaOrdenJudicial, "2024-11-20");
     assert.equal(r.fechaOficio, "2024-12-05");
-    assert.equal(r.fechaInscripcion, "2024-12-17");
-    assert.equal(r.estadoCicloVida, "INSCRIPCION_CONFIRMADA");
+    assert.equal(r.fechaInscripcion, null);
+    assert.equal(r.estadoCicloVida, "INSCRIPCION_NO_CONFIRMADA");
   });
 
-  test("si no hay una presentacion anterior, queda la fecha de la providencia", () => {
+  test("sin escrito anterior tampoco atribuye la fecha de la providencia", () => {
     const sinEscrito = caso.filter((a) => a.codigo !== 3);
     const r = detectorCicloVidaMedidaCautelar(sinEscrito);
-    assert.equal(r.fechaInscripcion, "2025-01-07");
+    assert.equal(r.fechaInscripcion, null);
   });
 
-  test("una presentacion anterior al oficio del juzgado no cuenta (no puede ser su respuesta)", () => {
+  test("presentación anterior tampoco implica inscripción", () => {
     const antes = [
       { codigo: 0, fecha: f("2024-11-25"), tipo: "ESCRITO", actividad: "Escrito, FePresentacion" },
       ...caso.filter((a) => a.codigo !== 3),
     ];
     const r = detectorCicloVidaMedidaCautelar(antes);
-    assert.equal(r.fechaInscripcion, "2025-01-07");
+    assert.equal(r.fechaInscripcion, null);
   });
 });
