@@ -10,6 +10,7 @@ import {
   type CausaConEstado,
 } from "../lib/legal-analysis.js";
 import { procesarCausaIndividual } from "../lib/procesar-causa.js";
+import { agruparMedidasCautelares } from "../lib/medidas-dedup.js";
 import { generarDashboardHTML } from "../lib/dashboard-html.js";
 import { upsertUpstashVector, queryUpstashVector } from "../lib/upstash.js";
 import {
@@ -854,6 +855,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     const resultadoIndividual = await procesarCausaIndividual(causaInput, baseUrl, apiKey);
     const msSatje = Date.now() - tFaseSatje;
     const actuaciones = resultadoIndividual.actuaciones;
+    const agrupacionMedidas = agruparMedidasCautelares(actuaciones);
 
     const indicadoresEncontrados: Record<string, any[]> = {
       medidas_cautelares: [],
@@ -1022,7 +1024,10 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
       vector_db_status: vectorDbStatus,
       resumen_indicadores: {
         // Cuenta una medida detectada, no todas las actuaciones que la mencionan.
-        medidas_cautelares_count: resultadoIndividual.medidaDetectada ? 1 : 0,
+        medidas_cautelares_count: agrupacionMedidas.totalIdentificadas,
+        medidas_cautelares_conteo_exhaustivo: false,
+        medidas_cautelares_advertencia: agrupacionMedidas.advertencia,
+        medidas_cautelares_grupos: agrupacionMedidas.grupos,
         resoluciones_count: indicadoresEncontrados.resoluciones_sentencias.length,
         notificaciones_count: indicadoresEncontrados.notificaciones_deprecatorios.length,
         riesgo_abandono_count: indicadoresEncontrados.riesgo_abandono.length,
