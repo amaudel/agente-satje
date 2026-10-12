@@ -102,7 +102,7 @@ Analiza las actuaciones y responde con precisión:
 2. Revisa e indica si existe SENTENCIA emitida en el expediente.
 3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
 4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
-5. Entrega un Resumen Ejecutivo del proceso (2-3 oraciones) y la próxima acción legal sugerida.`;
+5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia.`;
 
   const muestraActuaciones = resultado.actuaciones.slice(0, 25);
   const cv = resultado.cicloVidaMedida;
@@ -112,7 +112,7 @@ Analiza las actuaciones y responde con precisión:
       { role: "system", content: promptSistema },
       {
         role: "user",
-        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Abandono (COGEP): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días restantes)\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
       },
     ],
     temperature: 0.2,
