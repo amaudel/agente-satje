@@ -21,31 +21,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '24'
           cache: npm
       - run: npm ci
       - name: TypeScript typecheck
         run: npm run typecheck
       - name: Unit tests
         run: npm test
-      - name: Dependency security audit (report only)
+      - name: Dependency security audit
         if: always()
         run: |
           npm audit --json > audit-result.json || true
-          node -e 'const a=require("./audit-result.json");console.log("Audit totals:",JSON.stringify(a.metadata?.vulnerabilities||{})); for(const [name,v] of Object.entries(a.vulnerabilities||{})) console.log(name, v.severity, "direct:",v.isDirect, "fix:",JSON.stringify(v.fixAvailable))'
+          node -e 'const a=require("./audit-result.json");console.log("Audit totals:",JSON.stringify(a.metadata?.vulnerabilities||{}))'
+          npm audit --audit-level=high
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: satje-audit
           path: audit-result.json
           retention-days: 3
-      - name: Modernization compatibility trial (does not commit)
-        continue-on-error: true
-        run: |
-          npm uninstall @vercel/node
-          npm install --save-dev --save-exact @cloudflare/workers-types@5.20261006.1 wrangler@4.149.0
-          npm audit fix
-          npm ls @vercel/node wrangler --depth=0
-          npm run typecheck
-          npm test
-          npm audit --audit-level=high
