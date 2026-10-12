@@ -217,6 +217,41 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         .replace(/\\n/g, '<br/>');
     }
 
+    window.iniciarInventarioSATJE = async function() {
+      var output = document.getElementById('inventarioSatjeProgreso');
+      if (!output || output.dataset.running === '1') return;
+      output.dataset.running = '1';
+      var causa = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      var offset = 0, revisadas = 0, encontrados = 0, fallos = 0, total = null, parciales = false, visto = {};
+      try {
+        for (var pagina = 0; pagina < 150; pagina++) {
+          var response = await fetch('/?action=inventario-adjuntos&causa=' + encodeURIComponent(causa) + '&offset=' + offset, {headers:{Accept:'application/json'}});
+          if (!response.ok) throw new Error('HTTP ' + response.status);
+          var result = await response.json();
+          if (!result.ok) throw new Error(result.error || 'Sin respuesta');
+          var inv = result.inventario;
+          if (total === null) total = inv.actuacionesConDocumento;
+          if (total !== inv.actuacionesConDocumento || result.actuacionesParciales) parciales = true;
+          for (var j=0; j<inv.referencias.length; j++) {
+            var item=inv.referencias[j];
+            if (visto[item.codigo]) {parciales=true;continue;}
+            visto[item.codigo]=true;
+            revisadas++;
+            encontrados+=item.cantidad;
+            if (item.error) fallos++;
+          }
+          output.textContent = 'Revisadas ' + revisadas + ' de ' + total + ' actuaciones con adjuntos. Archivos localizados: ' + encontrados + '. Consultas fallidas: ' + fallos + '.';
+          if (result.siguienteOffset === null) break;
+          if (result.siguienteOffset <= offset) throw new Error('Paginación sin avance');
+          offset = result.siguienteOffset;
+        }
+        var completa = total !== null && revisadas === total && fallos === 0 && !parciales;
+        output.textContent += completa ? ' Inventario de adjuntos consultados completo; PDF leídos: 0.' : ' Inventario parcial o con errores. No se puede afirmar cobertura exhaustiva.';
+      } catch(e) {
+        output.textContent += ' Inventario interrumpido: ' + String(e.message || e) + '. Resultado parcial.';
+      } finally {output.dataset.running = '0';}
+    };
+
     window.cargarResumenIA = function() {
       var box = document.getElementById('resumenIaText');
       if (!box) return;
@@ -1413,6 +1448,13 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <p><strong>Sentencia:</strong> ${escapeHtml(estadoSentencia)} · Fuente: ${escapeHtml(fuenteSentencia)}.</p>
           <p><strong>Medidas cautelares:</strong> ${escapeHtml(estadoMedidas)} · Fuente: ${escapeHtml(fuenteMedidas)}.</p>
           <p style="font-size:12px;opacity:.85;">Los análisis especializados se limitan a su cobertura y no sustituyen la lectura íntegra de los documentos ni la revisión jurídica.</p>
+        </div>` : ''}
+        ${cobertura ? `
+        <div class="card">
+          <div class="card-title">📚 Inventario incremental del expediente</div>
+          <p>Recorre los adjuntos de todas las actuaciones por lotes y muestra el resultado acumulado. No extrae texto de PDF.</p>
+          <button type="button" class="btn-copy" onclick="window.iniciarInventarioSATJE()">Revisar todas las actuaciones con adjuntos</button>
+          <div id="inventarioSatjeProgreso" role="status" aria-live="polite">Listo para iniciar.</div>
         </div>` : ''}
         <!-- INFORME DE INTELIGENCIA ARTIFICIAL CON BOTÓN DE COPIAR -->
         <div class="card">
