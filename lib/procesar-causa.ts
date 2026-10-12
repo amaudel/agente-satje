@@ -42,6 +42,19 @@ export async function procesarCausaIndividual(
     ...(apiKey ? { "X-API-Key": apiKey } : {}),
   };
 
+  // Fase A: fuentes especializadas en paralelo, sin confundir errores con ausencia.
+  const consultarEspecializada = async (ruta: string): Promise<any | null> => {
+    if (!causaSinGuiones) return null;
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(causaSinGuiones)}/${ruta}`, { headers, signal: AbortSignal.timeout(12000) });
+      if (!res.ok) return null;
+      const dato: any = await res.json();
+      return dato?.success === true && dato?.analysisStatus === "COMPLETE" && dato?.partial === false ? dato : null;
+    } catch { return null; }
+  };
+  const sentenciaEspecializadaPromise = consultarEspecializada("sentencia/estado");
+  const medidasEspecializadasPromise = consultarEspecializada("medidas/cautelares");
+
   // El backend especializado separa proceso principal y unidad deprecada.
   // Se inicia en paralelo para no extender el presupuesto de la consulta.
   const riesgoEspecializadoPromise = (async (): Promise<any | null> => {
@@ -188,6 +201,19 @@ export async function procesarCausaIndividual(
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
   const cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
   const alertaLocal = calcularAlertaAbandonoProcesal(actuaciones, analisisSentencia.poseeSentencia);
+  const [sentenciaEspecializada, medidasEspecializadas] = await Promise.all([sentenciaEspecializadaPromise, medidasEspecializadasPromise]);
+  const evidenciaEspecializada = {
+    sentencia: sentenciaEspecializada ? { fuente: "SATJE especializado", estado: "CONFIRMADO_POR_SERVICIO", determinacion: String(sentenciaEspecializada.determination || ""), resumen: sentenciaEspecializada.summary } : { fuente: "reglas locales", estado: "NO_DETERMINABLE", determinacion: "SERVICIO_NO_DISPONIBLE" },
+    cautelares: medidasEspecializadas ? { fuente: "SATJE especializado", estado: "CONFIRMADO_POR_SERVICIO", determinacion: String(medidasEspecializadas.determination || ""), resumen: medidasEspecializadas.summary } : { fuente: "agrupacion local no exhaustiva", estado: "NO_DETERMINABLE", determinacion: "SERVICIO_NO_DISPONIBLE" },
+  };
+  const cobertura = {
+    actuacionesRecuperadas: actuaciones.length,
+    actuacionesParciales: erroresParciales.length > 0 || Boolean(backendError),
+    documentosInventariados: false,
+    documentosLeidos: null as number | null,
+    documentosTotales: null as number | null,
+    advertencia: "Actuaciones recuperadas no equivale a expediente documental completo. Total de PDF no inventariado; cobertura documental desconocida.",
+  };
   const riesgo = await riesgoEspecializadoPromise;
   let alertaAbandono = alertaLocal;
   let evidenciaDeprecatorio: { estado: string; codigoActuacion: string; fechaActuacion: string; documentoReferencia: string; documentosConsultados: number; documentosFallidos: number } | null = null;
@@ -255,7 +281,7 @@ export async function procesarCausaIndividual(
     erroresParciales,
     etapaProcesalGeneral: clasificacionEtapa.etapaGeneral,
     etapaProcesalEspecifica: clasificacionEtapa.etapaEspecifica,
-    poseeSentencia: analisisSentencia.poseeSentencia,
+    poseeSentencia: sentenciaEspecializada ? Number(sentenciaEspecializada.summary?.sentenciasDetectadas || 0) > 0 : analisisSentencia.poseeSentencia,
     fechaSentencia: analisisSentencia.fechaSentencia,
     medidaDetectada: cicloVidaMedida.medidaDetectada,
     tipoMedida: cicloVidaMedida.tipoMedida,
@@ -267,6 +293,8 @@ export async function procesarCausaIndividual(
     cicloVidaMedida,
     clasificacionEtapa,
     alertaAbandonoObjeto: alertaAbandono,
+    evidenciaEspecializada,
+    cobertura,
     evidenciaDeprecatorio,
     actuaciones,
   };
