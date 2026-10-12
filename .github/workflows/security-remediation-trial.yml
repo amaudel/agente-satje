@@ -1,0 +1,40 @@
+name: Security remediation trial (audit branch)
+on:
+  push:
+    branches:
+      - 'fix/satje-auditoria-evidencia-20261012'
+    paths:
+      - '.github/workflows/security-remediation-trial.yml'
+permissions:
+  contents: write
+jobs:
+  modernize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci
+      - name: Upgrade vulnerable direct packages in audit branch
+        run: |
+          npm install --save-exact @vercel/node@23.0.1
+          npm install --save-dev --save-exact wrangler@4.86.0
+          npm audit fix || true
+      - name: TypeScript and unit tests
+        run: |
+          npm run typecheck
+          npm test
+      - name: Block commit if high or critical vulnerabilities persist
+        run: npm audit --audit-level=high
+      - name: Commit tested dependency upgrades to audit branch only
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json
+          git diff --cached --quiet || git commit -m "fix(security): upgrade audited build dependencies after tests"
+          git push origin HEAD:refs/heads/fix/satje-auditoria-evidencia-20261012
