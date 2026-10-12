@@ -7,11 +7,12 @@ export interface InventarioAdjuntos {
 /** Inventario acotado: no afirma exhaustividad cuando resta una sola actuación sin revisar. */
 export async function inventariarAdjuntos(args: {
  causa:string;baseUrl:string;headers:Record<string,string>;actuaciones:any[];
- limite?:number;concurrencia?:number;timeoutMs?:number;
+ limite?:number;concurrencia?:number;timeoutMs?:number;offset?:number;
 }):Promise<InventarioAdjuntos>{
  const candidatos=args.actuaciones.filter(a=>a?.tieneDocumento===true && (a?.codigoActuacion||a?.codigo));
  const limite=Math.max(0,Math.min(args.limite??8,20));
- const seleccion=candidatos.slice(0,limite);
+ const offset=Math.max(0,Math.min(Math.floor(args.offset??0),candidatos.length));
+ const seleccion=candidatos.slice(offset,offset+limite);
  const referencias:InventarioAdjuntos["referencias"]=[];
  let cursor=0,errores=0,documentosEncontrados=0;
  const worker=async()=>{
@@ -30,8 +31,8 @@ export async function inventariarAdjuntos(args: {
   }
  };
  await Promise.all(Array.from({length:Math.min(Math.max(1,args.concurrencia??3),seleccion.length)},worker));
- const pendientes=candidatos.length-seleccion.length;
- return {estado:candidatos.length===0?"SIN_ACTUACIONES":errores===0&&pendientes===0?"COMPLETO":"PARCIAL",
+ const pendientes=candidatos.length-offset-seleccion.length;
+ return {estado:candidatos.length===0?"SIN_ACTUACIONES":errores===0&&pendientes===0&&offset===0?"COMPLETO":"PARCIAL",
   actuacionesConDocumento:candidatos.length,actuacionesRevisadas:seleccion.length,actuacionesPendientes:pendientes,
   documentosEncontrados,documentosLeidos:0,errores,referencias};
 }
