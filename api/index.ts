@@ -243,10 +243,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         if (!respuesta.ok) return res.status(502).json({ok:false,error:"No se pudieron consultar las actuaciones"});
         const fuente:any = await respuesta.json();
         const actuaciones = extraerTodasLasActuaciones(fuente);
-        const inventario = await inventariarAdjuntos({causa,baseUrl,headers,actuaciones,offset,limite:4,concurrencia:1,timeoutMs:4500});
+        const codigosRaw = req.query.codigos;
+        const listaCodigos = typeof codigosRaw === "string" ? codigosRaw.split(",") : [];
+        if (listaCodigos.length > 4 || listaCodigos.some(c => !/^\\d{1,16}$/.test(c))) {
+          return res.status(400).json({ok:false,error:"Máximo cuatro códigos numéricos por reintento"});
+        }
+        const retryMode = listaCodigos.length > 0;
+        const seleccion = retryMode ? actuaciones.filter((a:any) => listaCodigos.includes(String(a?.codigoActuacion ?? a?.codigo))) : actuaciones;
+        if (retryMode && seleccion.length !== new Set(listaCodigos).size) return res.status(409).json({ok:false,error:"Actuaciones cambiaron; reiniciar inventario"});
+        const inventario = await inventariarAdjuntos({causa,baseUrl,headers,actuaciones:seleccion,offset:retryMode?0:offset,limite:4,concurrencia:1,timeoutMs:4500});
         const parcial = fuente?.success===false || (Array.isArray(fuente?.partialErrors) && fuente.partialErrors.length>0);
         return res.status(200).json({ok:true,numeroProceso:causa,totalActuaciones:actuaciones.length,actuacionesParciales:parcial,inventario,
-          siguienteOffset:offset+inventario.actuacionesRevisadas<inventario.actuacionesConDocumento ? offset+inventario.actuacionesRevisadas : null,
+          siguienteOffset:retryMode ? null : offset+inventario.actuacionesRevisadas<inventario.actuacionesConDocumento ? offset+inventario.actuacionesRevisadas : null,
           advertencia:parcial?"Actuaciones parciales: no afirmar exhaustividad":"Se inventarian archivos, no se extrae texto de PDF"});
       } catch { return res.status(504).json({ok:false,error:"SATJE no respondió a tiempo"}); }
     }
