@@ -1442,7 +1442,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         ${cobertura ? `
         <div class="card" role="region" aria-label="Cobertura y fuentes del análisis">
           <div class="card-title">📋 Cobertura y fuentes del análisis judicial</div>
-          <p><strong>Actuaciones recuperadas:</strong> ${escapeHtml(cobertura.actuacionesRecuperadas)}. <strong>Incidentes identificados:</strong> ${escapeHtml(cobertura.incidentesIdentificados ?? "No disponible")}.
+          <p><strong>Actuaciones recuperadas:</strong> ${escapeHtml(cobertura.actuacionesRecuperadas)}. <strong>Incidentes identificados:</strong> ${cobertura.incidentesSinIdentificador ? "Por verificar (" + escapeHtml(cobertura.incidentesIdentificados) + " identificados)" : escapeHtml(cobertura.incidentesIdentificados ?? "No disponible")}.
           <strong>Información parcial:</strong> ${cobertura.actuacionesParciales ? 'Sí, revisar faltantes' : 'Sin errores parciales informados'}.</p>
           <p><strong>Actuaciones marcadas con adjunto:</strong> ${escapeHtml(cobertura.actuacionesConAdjuntoMarcado ?? "No disponible")}. <strong>Inventario de adjuntos:</strong> ${escapeHtml(cobertura.inventario?.actuacionesRevisadas ?? 0)} de ${escapeHtml(cobertura.inventario?.actuacionesConDocumento ?? 0)} actuaciones con adjuntos; ${escapeHtml(cobertura.inventario?.documentosEncontrados ?? 0)} archivos localizados, ${escapeHtml(cobertura.inventario?.errores ?? 0)} consultas fallidas. Estado: ${escapeHtml(cobertura.inventario?.estado ?? "NO DISPONIBLE")}. <strong>PDF leídos en este inventario:</strong> 0.</p>
           <p><strong>Sentencia:</strong> ${escapeHtml(estadoSentencia)} · Fuente: ${escapeHtml(fuenteSentencia)}.</p>
