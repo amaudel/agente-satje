@@ -223,9 +223,9 @@ export async function procesarCausaIndividual(
         fechaReferencialAbandono: String(general.fechaReferencialAbandono || "N/A"),
         esDeprecatorio: Boolean(deprecada),
         relojDeprecatorioInfo: deprecada
-          ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}. ${discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar: el oficio menciona distinta parte actora. ${avisoDoc} No usar este reloj para conclusiones jurídicas definitivas sin validar su efecto procesal." : ""}`
+          ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}. ${discrepancia ? `⚠️ Deprecatorio con identidad procesal por verificar: el oficio menciona distinta parte actora. ${avisoDoc} No usar este reloj para conclusiones jurídicas definitivas sin validar su efecto procesal.` : ""}`
           : undefined,
-        explicacion: discrepancia ? "⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: las partes del deprecatorio presentan discordancias. ${avisoDoc} El efecto procesal debe evaluarse por separado." : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
+        explicacion: discrepancia ? `⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: las partes del deprecatorio presentan discordancias. ${avisoDoc} El efecto procesal debe evaluarse por separado.` : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
       };
     }
   } else if (alertaLocal.nivel !== "abandonada" && alertaLocal.nivel !== "improcedente") {
