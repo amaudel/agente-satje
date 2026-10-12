@@ -109,6 +109,8 @@ Analiza las actuaciones y responde con precisión:
     ? `VERIFICACIÓN DOCUMENTAL DE DEPRECATORIO: Estado ${ed.estado}; actuación SATJE ${ed.codigoActuacion}; fecha ${ed.fechaActuacion}; referencia ${ed.documentoReferencia}; documentos leídos ${ed.documentosConsultados}; fallidos ${ed.documentosFallidos}. Una discrepancia documental NO determina nulidad ni efecto jurídico. Si se declara inaccesible o insuficiente, no afirmar identidad verificada.`
     : "";
   const muestraActuaciones = resultado.actuaciones.slice(0, 25);
+  const informeCobertura = JSON.stringify(resultado.cobertura);
+  const fuentesJudiciales = JSON.stringify(resultado.evidenciaEspecializada);
   const cv = resultado.cicloVidaMedida;
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -116,7 +118,7 @@ Analiza las actuaciones y responde con precisión:
       { role: "system", content: promptSistema },
       {
         role: "user",
-        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\n${evidenciaResumen}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\n${evidenciaResumen}\nCobertura documental: ${informeCobertura}\nVerificaciones especializadas: ${fuentesJudiciales}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
       },
     ],
     temperature: 0.2,
@@ -876,6 +878,8 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     const msSatje = Date.now() - tFaseSatje;
     const actuaciones = resultadoIndividual.actuaciones;
     const agrupacionMedidas = agruparMedidasCautelares(actuaciones);
+    const coberturaSATJE = resultadoIndividual.cobertura;
+    const fuentesEspecializadas = resultadoIndividual.evidenciaEspecializada;
 
     const indicadoresEncontrados: Record<string, any[]> = {
       medidas_cautelares: [],
@@ -1038,13 +1042,15 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         fecha_sentencia: resultadoIndividual.fechaSentencia,
       },
       alerta_abandono: resultadoIndividual.alertaAbandonoObjeto,
+      cobertura_documental: coberturaSATJE,
+      analisis_especializados: fuentesEspecializadas,
       total_actuaciones: actuaciones.length,
       resumen_ejecutivo_ia: resumenIA,
       resumen_pendiente: resumenPendiente,
       vector_db_status: vectorDbStatus,
       resumen_indicadores: {
         // Cuenta una medida detectada, no todas las actuaciones que la mencionan.
-        medidas_cautelares_count: agrupacionMedidas.totalIdentificadas,
+        medidas_cautelares_count: fuentesEspecializadas.cautelares.estado === "CONFIRMADO_POR_SERVICIO" ? Number(fuentesEspecializadas.cautelares.resumen?.medidasDetectadas ?? agrupacionMedidas.totalIdentificadas) : agrupacionMedidas.totalIdentificadas,
         medidas_cautelares_conteo_exhaustivo: false,
         medidas_cautelares_advertencia: agrupacionMedidas.advertencia,
         medidas_cautelares_grupos: agrupacionMedidas.grupos,
