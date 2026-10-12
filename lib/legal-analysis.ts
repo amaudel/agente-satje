@@ -486,7 +486,7 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
           me.fechaOficio = fechaLimpia;
           me.estadoCicloVida = "OFICIADA";
           me.observacion = "SATJE contiene la orden y el oficio judicial, pero no se ha encontrado respuesta o razón de inscripción de la institución.";
-          me.recomendacionEstrategica = "Presentar escrito solicitando al Juez reiterar oficio o pedir razón de cumplimiento al Registrador correspondiente.";
+          me.recomendacionEstrategica = "Verificar el cumplimiento del oficio judicial y, cuando corresponda, solicitar constancia o certificación registral antes de determinar si la medida fue inscrita.";
         }
       }
 
@@ -722,7 +722,7 @@ export function calcularAlertaAbandonoProcesal(actuaciones: any[], poseeSentenci
     nivel = 'critico';
     etiqueta = '🔴 RIESGO CRÍTICO';
     badgeClass = 'danger';
-    explicacion = `¡Riesgo inminente! Restan solo ${diasRestantes} días. Se requiere ingresar escrito de impulso procesal urgente.`;
+    explicacion = `¡Riesgo inminente! Restan solo ${diasRestantes} días. Solicitar revisión profesional del expediente para identificar actuaciones útiles y eventuales excepciones al cómputo.`;
   } else {
     nivel = 'vencido';
     etiqueta = '🟣 VENCIDO (Riesgo de Abandono)';
