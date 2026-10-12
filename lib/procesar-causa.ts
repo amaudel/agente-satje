@@ -9,6 +9,7 @@ import {
 } from "./legal-analysis.js";
 import { verificarIdentidadDeprecatorio } from "./deprecatorios-identidad.js";
 import { verificarDocumentosDeprecatorio } from "./deprecatorios-documentos.js";
+import { inventariarAdjuntos } from "./inventario-adjuntos.js";
 
 // Presupuesto de tiempo por causa. Se reserva margen frente al maxDuration de
 // la funcion serverless (60s) para poder devolver una respuesta en vez de que
@@ -41,6 +42,19 @@ export async function procesarCausaIndividual(
     "Content-Type": "application/json",
     ...(apiKey ? { "X-API-Key": apiKey } : {}),
   };
+
+  // Fase A: fuentes especializadas en paralelo, sin confundir errores con ausencia.
+  const consultarEspecializada = async (ruta: string): Promise<any | null> => {
+    if (!causaSinGuiones) return null;
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(causaSinGuiones)}/${ruta}`, { headers, signal: AbortSignal.timeout(12000) });
+      if (!res.ok) return null;
+      const dato: any = await res.json();
+      return dato?.success === true && dato?.analysisStatus === "COMPLETE" && dato?.partial === false ? dato : null;
+    } catch { return null; }
+  };
+  const sentenciaEspecializadaPromise = consultarEspecializada("sentencia/estado");
+  const medidasEspecializadasPromise = consultarEspecializada("medidas-cautelares");
 
   // El backend especializado separa proceso principal y unidad deprecada.
   // Se inicia en paralelo para no extender el presupuesto de la consulta.
@@ -184,10 +198,30 @@ export async function procesarCausaIndividual(
     if (m && (fechaIngreso === null || m[1] < fechaIngreso)) fechaIngreso = m[1];
   }
 
+  const inventarioPromise = inventariarAdjuntos({causa:causaSinGuiones,baseUrl,headers,actuaciones,limite:4,concurrencia:1,timeoutMs:4500});
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
   const cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
   const alertaLocal = calcularAlertaAbandonoProcesal(actuaciones, analisisSentencia.poseeSentencia);
+  const [sentenciaEspecializada, medidasEspecializadas] = await Promise.all([sentenciaEspecializadaPromise, medidasEspecializadasPromise]);
+  const evidenciaEspecializada = {
+    sentencia: sentenciaEspecializada ? { fuente: "SATJE especializado", estado: "CONFIRMADO_POR_SERVICIO", determinacion: String(sentenciaEspecializada.determination || ""), resumen: sentenciaEspecializada.summary } : { fuente: "reglas locales", estado: "NO_DETERMINABLE", determinacion: "SERVICIO_NO_DISPONIBLE" },
+    cautelares: medidasEspecializadas ? { fuente: "SATJE especializado", estado: "CONFIRMADO_POR_SERVICIO", determinacion: String(medidasEspecializadas.determination || ""), resumen: medidasEspecializadas.summary } : { fuente: "agrupacion local no exhaustiva", estado: "NO_DETERMINABLE", determinacion: "SERVICIO_NO_DISPONIBLE" },
+  };
+  const inventario = await inventarioPromise;
+  const cobertura = {
+    actuacionesRecuperadas: actuaciones.length,
+    actuacionesConAdjuntoMarcado: actuaciones.filter((a:any) => a?.tieneDocumento === true).length,
+    actuacionesSinAdjuntoMarcado: actuaciones.filter((a:any) => a?.tieneDocumento === false).length,
+    incidentesIdentificados: new Set(actuaciones.map((a:any) => a?.idIncidenteJudicatura != null ? `id:${a.idIncidenteJudicatura}` : a?.incidente != null && a?.idJudicatura != null ? `inc:${a.incidente}:${a.idJudicatura}` : a?.incidente != null ? `inc:${a.incidente}:${a.nombreJudicatura || ""}` : null).filter(Boolean)).size,
+    incidentesSinIdentificador: actuaciones.some((a:any) => a?.idIncidenteJudicatura == null && a?.incidente == null),
+    actuacionesParciales: erroresParciales.length > 0 || Boolean(backendError),
+    documentosInventariados: inventario.estado === "COMPLETO",
+    inventario,
+    documentosLeidos: null as number | null,
+    documentosTotales: inventario.estado === "COMPLETO" ? inventario.documentosEncontrados : null as number | null,
+    advertencia: inventario.estado === "COMPLETO" ? "Adjuntos inventariados, pero PDFs no leídos integralmente." : "Inventario parcial de adjuntos: no inferir cantidad total de PDF ni completitud documental.",
+  };
   const riesgo = await riesgoEspecializadoPromise;
   let alertaAbandono = alertaLocal;
   let evidenciaDeprecatorio: { estado: string; codigoActuacion: string; fechaActuacion: string; documentoReferencia: string; documentosConsultados: number; documentosFallidos: number } | null = null;
@@ -255,7 +289,7 @@ export async function procesarCausaIndividual(
     erroresParciales,
     etapaProcesalGeneral: clasificacionEtapa.etapaGeneral,
     etapaProcesalEspecifica: clasificacionEtapa.etapaEspecifica,
-    poseeSentencia: analisisSentencia.poseeSentencia,
+    poseeSentencia: sentenciaEspecializada ? Number(sentenciaEspecializada.summary?.sentenciasDetectadas || 0) > 0 : analisisSentencia.poseeSentencia,
     fechaSentencia: analisisSentencia.fechaSentencia,
     medidaDetectada: cicloVidaMedida.medidaDetectada,
     tipoMedida: cicloVidaMedida.tipoMedida,
@@ -267,6 +301,8 @@ export async function procesarCausaIndividual(
     cicloVidaMedida,
     clasificacionEtapa,
     alertaAbandonoObjeto: alertaAbandono,
+    evidenciaEspecializada,
+    cobertura,
     evidenciaDeprecatorio,
     actuaciones,
   };

@@ -125,3 +125,22 @@ test("timeout especializado: advierte que el cálculo local es provisional", asy
     assert.match(r.alertaAbandonoObjeto.etiqueta, /provisional/);
   } finally { globalThis.fetch = original; }
 });
+
+test("fase A: cuenta incidentes de la respuesta SATJE y conserva IDs del grupo", async () => {
+  await conFetch({ success: true, partialErrors: [], incidentes: [
+    { incidente: 1, idIncidenteJudicatura: 101, idJudicatura: "01333", nombreJudicatura: "CUENCA", actuaciones: [{ codigoActuacion: 11, tipo: "CARATULA", fecha: "2023-01-01" }] },
+    { incidente: 2, idIncidenteJudicatura: 202, idJudicatura: "07317", nombreJudicatura: "EL GUABO", actuaciones: [{ codigoActuacion: 12, tipo: "RAZON", fecha: "2023-02-01" }] }
+  ] }, async () => {
+    const r = await procesarCausaIndividual("01333202310725", "https://backend.test", "k");
+    assert.equal(r.cobertura.incidentesIdentificados, 2);
+    assert.equal(r.cobertura.incidentesSinIdentificador, false);
+    assert.equal(r.actuaciones[1].idIncidenteJudicatura, 202);
+  });
+});
+
+test("fase A: no presenta cero incidentes confirmados si SATJE omite los identificadores", async () => {
+  await conFetch({ success: true, partialErrors: [], incidentes: [{ nombreJudicatura: "CUENCA", actuaciones: [{ codigoActuacion: 1, tipo: "AUTO" }] }] }, async () => {
+    const r = await procesarCausaIndividual("01333202310725", "https://backend.test", "k");
+    assert.equal(r.cobertura.incidentesSinIdentificador, true);
+  });
+});

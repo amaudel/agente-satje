@@ -32,6 +32,12 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const mostrarValorDemanda = Boolean(causa) && Number(datos?.total_actuaciones) > 0;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
+  const cobertura = datos?.cobertura_documental;
+  const especializados = datos?.analisis_especializados;
+  const fuenteSentencia = especializados?.sentencia?.fuente || "No disponible";
+  const estadoSentencia = especializados?.sentencia?.determinacion || "NO_DETERMINABLE";
+  const fuenteMedidas = especializados?.cautelares?.fuente || "No disponible";
+  const estadoMedidas = especializados?.cautelares?.determinacion || "NO_DETERMINABLE";
   const actuaciones = datos?.actuaciones_recientes || [];
   const vectorDbStatus = datos?.vector_db_status || { activo: false, precedentes: [] };
   // La indexacion en Upstash sigue ocurriendo por detras (la usa el chat); la
@@ -210,6 +216,97 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         .replace(/\\n\\n/g, '<br/><br/>')
         .replace(/\\n/g, '<br/>');
     }
+
+    window.iniciarInventarioSATJE = async function() {
+      var output = document.getElementById('inventarioSatjeProgreso');
+      if (!output || output.dataset.running === '1') return;
+      output.dataset.running = '1';
+      var causa = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      var key = 'satje-inventario-v2:' + causa;
+      var state = {offset:0,total:null,items:{},parcial:false,terminado:false};
+      try { var saved = sessionStorage.getItem(key); if(saved) state = JSON.parse(saved); } catch (_) {}
+      if(state.terminado) state = {offset:0,total:null,items:{},parcial:false,terminado:false};
+      function resumen() {
+        var items=Object.values(state.items);
+        var errors=items.filter(function(x){return !!x.error;}).length;
+        var files=items.reduce(function(n,x){return n+(x.cantidad||0);},0);
+        output.textContent='Posiciones recorridas: '+state.offset+' de '+(state.total===null?'?':state.total)+'. Códigos distintos con resultado: '+items.length+'. Archivos localizados: '+files+'. Consultas fallidas: '+errors+
+          '. Siguiente posición: '+state.offset+'.';
+      }
+      function save() {try { sessionStorage.setItem(key,JSON.stringify(state)); }catch (_) {}}
+      try {
+        for(var page=0;page<150;page++) {
+          var result=null;
+          for(var retry=0;retry<3;retry++) {
+            try {
+              var response=await fetch('/?action=inventario-adjuntos&causa='+encodeURIComponent(causa)+'&offset='+state.offset,{headers:{Accept:'application/json'}});
+              if (!response.ok) throw new Error('HTTP '+response.status);
+              result=await response.json();
+              if(!result.ok) throw new Error(result.error||'SATJE sin respuesta');
+              break;
+            } catch(error) {
+              if(retry===2) throw error;
+              await new Promise(function(resolve){setTimeout(resolve,600*(2**retry));});
+            }
+          }
+          var inv=result.inventario;
+          if(state.total!==null && state.total!==inv.actuacionesConDocumento) state.parcial=true;
+          state.total=inv.actuacionesConDocumento;
+          if(result.actuacionesParciales) state.parcial=true;
+          inv.referencias.forEach(function(item){state.items[item.codigo]=item;});
+          if(result.siguienteOffset===null) {
+            state.offset=state.total;
+            state.terminado=true;
+            save();resumen();break;
+          }
+          if(result.siguienteOffset<=state.offset) throw new Error('Paginación sin avance');
+          state.offset=result.siguienteOffset;
+          save();resumen();
+          await new Promise(function(resolve){setTimeout(resolve,300);});
+        }
+        var items=Object.values(state.items);
+        var complete=state.terminado && state.offset>=state.total && !state.parcial && items.length===state.total && items.every(function(x){return !x.error;});
+        output.textContent += complete?' Inventario de adjuntos finalizado; PDF leídos en este inventario: 0.':
+          ' Inventario parcial o con errores. Puedes volver a pulsar para reanudar si fue interrumpido.';
+      }catch(e) {
+        save();resumen();
+        output.textContent+=' Pausado por '+String(e.message||e)+'. Pulsa nuevamente para reanudar.';
+      }finally {output.dataset.running='0';}
+    };
+
+    window.reintentarFallidosSATJE = async function() {
+      var output=document.getElementById('inventarioSatjeProgreso');
+      if(!output || output.dataset.running==='1') return;
+      output.dataset.running='1';
+      var causa=new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      var key='satje-inventario-v2:'+causa;
+      var state;
+      try {state=JSON.parse(sessionStorage.getItem(key)||'null');}catch(_){}
+      if(!state || !state.items) {output.textContent='Primero ejecuta el inventario.';output.dataset.running='0';return;}
+      var failed=Object.values(state.items).filter(function(x){return !!x.error;}).map(function(x){return String(x.codigo);});
+      if(!failed.length) {output.textContent='No hay consultas fallidas guardadas.';output.dataset.running='0';return;}
+      var repaired=0;
+      try {
+        for(var i=0;i<failed.length;i+=4){
+          var group=failed.slice(i,i+4);
+          var response=await fetch('/?action=inventario-adjuntos&causa='+encodeURIComponent(causa)+'&codigos='+encodeURIComponent(group.join(',')),{headers:{Accept:'application/json'}});
+          if(!response.ok) { var detail=''; try {var failure=await response.json(); detail=failure.error||'';}catch(_){} throw new Error('HTTP '+response.status+(detail?': '+detail:'')); }
+          var result=await response.json();
+          if(!result.ok) throw new Error(result.error||'Consulta fallida');
+          result.inventario.referencias.forEach(function(item){
+            if(!item.error && state.items[item.codigo]?.error) repaired++;
+            state.items[item.codigo]=item;
+          });
+          sessionStorage.setItem(key,JSON.stringify(state));
+          output.textContent='Recuperadas '+repaired+' de '+failed.length+' consultas fallidas originales.';
+          await new Promise(function(resolve){setTimeout(resolve,600);});
+        }
+        var pending=Object.values(state.items).filter(function(x){return !!x.error;}).length;
+        output.textContent+=' Persisten '+pending+' consultas fallidas. Los PDF no se han leído.';
+      } catch(e) {
+        output.textContent='Recuperación interrumpida: '+String(e.message||e)+'. Los resultados anteriores permanecen guardados; puedes reintentar.';
+      } finally {output.dataset.running='0';}
+    };
 
     window.cargarResumenIA = function() {
       var box = document.getElementById('resumenIaText');
@@ -1222,10 +1319,10 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <div class="kpi-card ${poseeSentencia ? 'sentencia-si' : 'sentencia-no'}">
             <div>
               <div class="kpi-tag ${poseeSentencia ? 'success' : 'warning'}">
-                ${poseeSentencia ? '🟢 Sentencia Emitida' : '🔴 Sin Sentencia Emitida'}
+                ${poseeSentencia ? '🟢 Sentencia Emitida' : '⚠️ Sentencia no confirmada'}
               </div>
               <div class="kpi-main-title">
-                ${poseeSentencia ? 'Sentencia Emitida en la Causa' : 'Sin Sentencia Dictada'}
+                ${poseeSentencia ? 'Sentencia Emitida en la Causa' : 'Sin sentencia detectada'}
               </div>
             </div>
             <div>
@@ -1397,6 +1494,25 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           </div>
         </div>
 
+        <!-- FASE A: integridad observable; nunca se confunde recuperar actuaciones con leer todos los PDF -->
+        ${cobertura ? `
+        <div class="card" role="region" aria-label="Cobertura y fuentes del análisis">
+          <div class="card-title">📋 Cobertura y fuentes del análisis judicial</div>
+          <p><strong>Actuaciones recuperadas:</strong> ${escapeHtml(cobertura.actuacionesRecuperadas)}. <strong>Incidentes identificados:</strong> ${cobertura.incidentesSinIdentificador ? "Por verificar (" + escapeHtml(cobertura.incidentesIdentificados) + " identificados)" : escapeHtml(cobertura.incidentesIdentificados ?? "No disponible")}.
+          <strong>Información parcial:</strong> ${cobertura.actuacionesParciales ? 'Sí, revisar faltantes' : 'Sin errores parciales informados'}.</p>
+          <p><strong>Actuaciones marcadas con adjunto:</strong> ${escapeHtml(cobertura.actuacionesConAdjuntoMarcado ?? "No disponible")}. <strong>Inventario de adjuntos:</strong> ${escapeHtml(cobertura.inventario?.actuacionesRevisadas ?? 0)} de ${escapeHtml(cobertura.inventario?.actuacionesConDocumento ?? 0)} actuaciones con adjuntos; ${escapeHtml(cobertura.inventario?.documentosEncontrados ?? 0)} archivos localizados, ${escapeHtml(cobertura.inventario?.errores ?? 0)} consultas fallidas. Estado: ${escapeHtml(cobertura.inventario?.estado ?? "NO DISPONIBLE")}. <strong>PDF leídos en este inventario:</strong> 0.</p>
+          <p><strong>Sentencia:</strong> ${escapeHtml(estadoSentencia)} · Fuente: ${escapeHtml(fuenteSentencia)}.</p>
+          <p><strong>Medidas cautelares:</strong> ${escapeHtml(estadoMedidas)} · Fuente: ${escapeHtml(fuenteMedidas)}.</p>
+          <p style="font-size:12px;opacity:.85;">Los análisis especializados se limitan a su cobertura y no sustituyen la lectura íntegra de los documentos ni la revisión jurídica.</p>
+        </div>` : ''}
+        ${cobertura ? `
+        <div class="card">
+          <div class="card-title">📚 Inventario incremental del expediente</div>
+          <p>Recorre los adjuntos de todas las actuaciones por lotes y muestra el resultado acumulado. No extrae texto de PDF.</p>
+          <button type="button" class="btn-copy" onclick="window.iniciarInventarioSATJE()">Revisar todas las actuaciones con adjuntos</button>
+          <button type="button" class="btn-copy" onclick="window.reintentarFallidosSATJE()">Reintentar únicamente consultas fallidas</button>
+          <div id="inventarioSatjeProgreso" role="status" aria-live="polite">Listo para iniciar.</div>
+        </div>` : ''}
         <!-- INFORME DE INTELIGENCIA ARTIFICIAL CON BOTÓN DE COPIAR -->
         <div class="card">
           <div class="card-title">

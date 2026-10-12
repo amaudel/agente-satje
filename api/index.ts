@@ -7,10 +7,12 @@ import {
   seleccionarJuicioVigente,
   evaluarCompletitudBusqueda,
   sinSeparadoresCausa,
+  extraerTodasLasActuaciones,
   type CausaConEstado,
 } from "../lib/legal-analysis.js";
 import { procesarCausaIndividual } from "../lib/procesar-causa.js";
 import { agruparMedidasCautelares } from "../lib/medidas-dedup.js";
+import { inventariarAdjuntos } from "../lib/inventario-adjuntos.js";
 import { generarDashboardHTML } from "../lib/dashboard-html.js";
 import { upsertUpstashVector, queryUpstashVector } from "../lib/upstash.js";
 import {
@@ -109,6 +111,8 @@ Analiza las actuaciones y responde con precisión:
     ? `VERIFICACIÓN DOCUMENTAL DE DEPRECATORIO: Estado ${ed.estado}; actuación SATJE ${ed.codigoActuacion}; fecha ${ed.fechaActuacion}; referencia ${ed.documentoReferencia}; documentos leídos ${ed.documentosConsultados}; fallidos ${ed.documentosFallidos}. Una discrepancia documental NO determina nulidad ni efecto jurídico. Si se declara inaccesible o insuficiente, no afirmar identidad verificada.`
     : "";
   const muestraActuaciones = resultado.actuaciones.slice(0, 25);
+  const informeCobertura = JSON.stringify(resultado.cobertura);
+  const fuentesJudiciales = JSON.stringify(resultado.evidenciaEspecializada);
   const cv = resultado.cicloVidaMedida;
   const completion = await openai.chat.completions.create({
     model: "gpt-4o-mini",
@@ -116,7 +120,7 @@ Analiza las actuaciones y responde con precisión:
       { role: "system", content: promptSistema },
       {
         role: "user",
-        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\n${evidenciaResumen}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\n${evidenciaResumen}\nCobertura documental: ${informeCobertura}\nVerificaciones especializadas: ${fuentesJudiciales}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
       },
     ],
     temperature: 0.2,
@@ -129,6 +133,14 @@ Analiza las actuaciones y responde con precisión:
     ? `VERIFICACIÓN DE DEPRECATORIO: ${ed.estado}. Actuación SATJE ${ed.codigoActuacion}; fecha ${ed.fechaActuacion}; referencia ${ed.documentoReferencia}. Documentos leídos: ${ed.documentosConsultados}, fallidos: ${ed.documentosFallidos}. La discrepancia documental no implica automáticamente nulidad ni determina el efecto jurídico de la actuación.`
     : "";
   const respuesta = notaDocumento ? `${notaDocumento}\n\n${respuestaModelo}` : respuestaModelo;
+  // No convertir una alerta preventiva en auto judicial de abandono sin evidencia.
+  const falsaDeclaratoria = /(?:se ha declarado (?:un )?(?:auto de )?abandono|se declar[oó] (?:un )?(?:auto de )?abandono|(?:consta|existe|se registr[oó]|se dict[oó]) (?:un |el )?auto de abandono|(?:el proceso|la causa|el juicio) (?:fue|ha sido|est[aá]) (?:declarado |declarada )?en abandono)/i.test(respuesta);
+  const sentenciaAbandonoConfirmada = resultado.alertaAbandonoObjeto?.nivel === "abandonada";
+  if (falsaDeclaratoria && !sentenciaAbandonoConfirmada) {
+    return "⚠️ RESUMEN AUTOMÁTICO NO CONCLUYENTE: el modelo afirmó una declaratoria o auto judicial de abandono sin evidencia verificada en el análisis especializado. Se ha omitido el texto para evitar un diagnóstico jurídico incorrecto. Consulte las actuaciones y documentos originales.\\n\\n" +
+      (notaDocumento ? notaDocumento + "\\n\\n" : "") +
+      "Estado preventivo SATJE: " + resultado.alertaAbandono + " (" + resultado.diasRestantesAbandono + " días referenciales). Esta alerta no constituye una declaratoria judicial.";
+  }
   const alerta = resultado.alertaAbandonoObjeto;
   const vencido = alerta?.nivel === "vencido" || (typeof alerta?.diasRestantes === "number" && alerta.diasRestantes < 0);
   if (!vencido) return respuesta;
@@ -214,6 +226,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     } else if (!bodyData) {
       bodyData = {};
+    }
+
+    // Inventario incremental autorizado por sesión. Cada página consulta hasta ocho actuaciones.
+    if (req.query.action === "inventario-adjuntos") {
+      const causa = String(req.query.causa || "").replace(/-/g, "");
+      if (!/^[0-9A-Za-z]{13,20}$/.test(causa)) return res.status(400).json({ok:false,error:"Identificador de causa inválido"});
+      const offset = Number(req.query.offset || 0);
+      if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10000) return res.status(400).json({ok:false,error:"Offset inválido"});
+      const baseUrl = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKey = process.env.SATJE_API_KEY;
+      if (!apiKey) return res.status(503).json({ok:false,error:"API SATJE no configurada"});
+      const headers = {Accept:"application/json","X-API-Key":apiKey};
+      try {
+        const respuesta = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(causa)}/actuaciones`,{headers,signal:AbortSignal.timeout(25000)});
+        if (!respuesta.ok) return res.status(502).json({ok:false,error:"No se pudieron consultar las actuaciones"});
+        const fuente:any = await respuesta.json();
+        const actuaciones = extraerTodasLasActuaciones(fuente);
+        const codigosRaw = req.query.codigos;
+        const listaCodigos = typeof codigosRaw === "string" ? codigosRaw.split(",") : [];
+        if (listaCodigos.length > 4 || listaCodigos.some(c => !/^[0-9]{1,16}$/.test(c))) {
+          return res.status(400).json({ok:false,error:"Máximo cuatro códigos numéricos por reintento"});
+        }
+        const retryMode = listaCodigos.length > 0;
+        const codigosUnicos = [...new Set(listaCodigos)];
+        const encontrados = new Map<string,any>();
+        for (const a of actuaciones) {
+          const codigo = String(a?.codigoActuacion ?? a?.codigo ?? "");
+          if (codigosUnicos.includes(codigo) && !encontrados.has(codigo)) encontrados.set(codigo,a);
+        }
+        const seleccion = retryMode ? codigosUnicos.filter(c => encontrados.has(c)).map(c => encontrados.get(c)) : actuaciones;
+        const ausentes = retryMode ? codigosUnicos.filter(c => !encontrados.has(c)) : [];
+        if (ausentes.length) return res.status(409).json({ok:false,error:"Códigos no encontrados en la consulta actual",codigosAusentes:ausentes});
+        const inventario = await inventariarAdjuntos({causa,baseUrl,headers,actuaciones:seleccion,offset:retryMode?0:offset,limite:4,concurrencia:1,timeoutMs:4500});
+        const parcial = fuente?.success===false || (Array.isArray(fuente?.partialErrors) && fuente.partialErrors.length>0);
+        return res.status(200).json({ok:true,numeroProceso:causa,totalActuaciones:actuaciones.length,actuacionesParciales:parcial,inventario,
+          siguienteOffset:retryMode ? null : offset+inventario.actuacionesRevisadas<inventario.actuacionesConDocumento ? offset+inventario.actuacionesRevisadas : null,
+          advertencia:parcial?"Actuaciones parciales: no afirmar exhaustividad":"Se inventarian archivos, no se extrae texto de PDF"});
+      } catch { return res.status(504).json({ok:false,error:"SATJE no respondió a tiempo"}); }
     }
 
     // 2. ENDPOINT DE CHAT LEGAL DE IA
@@ -876,6 +926,8 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     const msSatje = Date.now() - tFaseSatje;
     const actuaciones = resultadoIndividual.actuaciones;
     const agrupacionMedidas = agruparMedidasCautelares(actuaciones);
+    const coberturaSATJE = resultadoIndividual.cobertura;
+    const fuentesEspecializadas = resultadoIndividual.evidenciaEspecializada;
 
     const indicadoresEncontrados: Record<string, any[]> = {
       medidas_cautelares: [],
@@ -1038,13 +1090,15 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         fecha_sentencia: resultadoIndividual.fechaSentencia,
       },
       alerta_abandono: resultadoIndividual.alertaAbandonoObjeto,
+      cobertura_documental: coberturaSATJE,
+      analisis_especializados: fuentesEspecializadas,
       total_actuaciones: actuaciones.length,
       resumen_ejecutivo_ia: resumenIA,
       resumen_pendiente: resumenPendiente,
       vector_db_status: vectorDbStatus,
       resumen_indicadores: {
         // Cuenta una medida detectada, no todas las actuaciones que la mencionan.
-        medidas_cautelares_count: agrupacionMedidas.totalIdentificadas,
+        medidas_cautelares_count: fuentesEspecializadas.cautelares.estado === "CONFIRMADO_POR_SERVICIO" ? Number(fuentesEspecializadas.cautelares.resumen?.medidasDetectadas ?? agrupacionMedidas.totalIdentificadas) : agrupacionMedidas.totalIdentificadas,
         medidas_cautelares_conteo_exhaustivo: false,
         medidas_cautelares_advertencia: agrupacionMedidas.advertencia,
         medidas_cautelares_grupos: agrupacionMedidas.grupos,
