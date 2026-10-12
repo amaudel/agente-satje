@@ -190,6 +190,7 @@ export async function procesarCausaIndividual(
   const alertaLocal = calcularAlertaAbandonoProcesal(actuaciones, analisisSentencia.poseeSentencia);
   const riesgo = await riesgoEspecializadoPromise;
   let alertaAbandono = alertaLocal;
+  let evidenciaDeprecatorio: { estado: string; codigoActuacion: string; fechaActuacion: string; documentoReferencia: string; documentosConsultados: number; documentosFallidos: number } | null = null;
   if (riesgo?.alertaGeneral && riesgo?.relojProcesoPrincipal) {
     const principal = riesgo.relojProcesoPrincipal;
     const deprecada = riesgo.relojUnidadDeprecada;
@@ -202,6 +203,16 @@ export async function procesarCausaIndividual(
           cabeceras: headers, actorOrigen: actuaciones.filter((a:any)=>String(a?.nombreJudicatura||"").includes("CUENCA")).map((a:any)=>String(a?.actividad||"")).join(" "),
           textoActuacion: String(deprecada.ultimaActuacion.actividadResumen||""), maxMs: 4000,
         }) : null;
+    if (evidenciaDoc && deprecada?.ultimaActuacion) {
+      evidenciaDeprecatorio = {
+        estado: evidenciaDoc.estado,
+        codigoActuacion: String(deprecada.ultimaActuacion.codigo || ""),
+        fechaActuacion: String(deprecada.ultimaActuacion.fecha || ""),
+        documentoReferencia: evidenciaDoc.referencia,
+        documentosConsultados: evidenciaDoc.documentosConsultados,
+        documentosFallidos: evidenciaDoc.documentosFallidos,
+      };
+    }
     const avisoDoc = evidenciaDoc?.estado === "DISCREPANCIA_DOCUMENTAL"
       ? "Discrepancia confirmada en el texto del PDF de SATJE; no determina nulidad del deprecatorio."
       : evidenciaDoc?.estado === "COINCIDENCIA_DOCUMENTAL"
@@ -256,6 +267,7 @@ export async function procesarCausaIndividual(
     cicloVidaMedida,
     clasificacionEtapa,
     alertaAbandonoObjeto: alertaAbandono,
+    evidenciaDeprecatorio,
     actuaciones,
   };
 }
