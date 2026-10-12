@@ -28,3 +28,14 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm test
+      - name: Dependency security audit (report only)
+        if: always()
+        run: |
+          npm audit --json > audit-result.json || true
+          node -e 'const a=require("./audit-result.json");console.log("Audit totals:",JSON.stringify(a.metadata?.vulnerabilities||{})); for(const [name,v] of Object.entries(a.vulnerabilities||{})) console.log(name, v.severity, "direct:",v.isDirect, "fix:",JSON.stringify(v.fixAvailable))'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: satje-audit
+          path: audit-result.json
+          retention-days: 3
