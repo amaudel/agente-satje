@@ -1,4 +1,5 @@
 name: Security remediation trial (audit branch)
+# Verified dependency compatibility: Node 24, typecheck, tests, npm audit.
 on:
   push:
     branches:
