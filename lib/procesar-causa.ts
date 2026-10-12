@@ -198,7 +198,7 @@ export async function procesarCausaIndividual(
     if (m && (fechaIngreso === null || m[1] < fechaIngreso)) fechaIngreso = m[1];
   }
 
-  const inventarioPromise = inventariarAdjuntos({causa:causaSinGuiones,baseUrl,headers,actuaciones,limite:8,concurrencia:3,timeoutMs:3000});
+  const inventarioPromise = inventariarAdjuntos({causa:causaSinGuiones,baseUrl,headers,actuaciones,limite:4,concurrencia:1,timeoutMs:4500});
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
   const cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
