@@ -102,8 +102,12 @@ Analiza las actuaciones y responde con precisión:
 2. Revisa e indica si existe SENTENCIA emitida en el expediente.
 3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
 4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
-5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo.`;
+5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.`;
 
+  const ed = resultado.evidenciaDeprecatorio;
+  const evidenciaResumen = ed
+    ? `VERIFICACIÓN DOCUMENTAL DE DEPRECATORIO: Estado ${ed.estado}; actuación SATJE ${ed.codigoActuacion}; fecha ${ed.fechaActuacion}; referencia ${ed.documentoReferencia}; documentos leídos ${ed.documentosConsultados}; fallidos ${ed.documentosFallidos}. Una discrepancia documental NO determina nulidad ni efecto jurídico. Si se declara inaccesible o insuficiente, no afirmar identidad verificada.`
+    : "";
   const muestraActuaciones = resultado.actuaciones.slice(0, 25);
   const cv = resultado.cicloVidaMedida;
   const completion = await openai.chat.completions.create({
@@ -112,14 +116,19 @@ Analiza las actuaciones y responde con precisión:
       { role: "system", content: promptSistema },
       {
         role: "user",
-        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\n${evidenciaResumen}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
       },
     ],
     temperature: 0.2,
     max_tokens: 900,
   });
 
-  const respuesta = completion.choices[0]?.message?.content || "Sin respuesta del modelo.";
+  const respuestaModelo = completion.choices[0]?.message?.content || "Sin respuesta del modelo.";
+  // Trazabilidad determinista: no depende de que el modelo recuerde citar la fuente.
+  const notaDocumento = ed
+    ? `VERIFICACIÓN DE DEPRECATORIO: ${ed.estado}. Actuación SATJE ${ed.codigoActuacion}; fecha ${ed.fechaActuacion}; referencia ${ed.documentoReferencia}. Documentos leídos: ${ed.documentosConsultados}, fallidos: ${ed.documentosFallidos}. La discrepancia documental no implica automáticamente nulidad ni determina el efecto jurídico de la actuación.`
+    : "";
+  const respuesta = notaDocumento ? `${notaDocumento}\n\n${respuestaModelo}` : respuestaModelo;
   const alerta = resultado.alertaAbandonoObjeto;
   const vencido = alerta?.nivel === "vencido" || (typeof alerta?.diasRestantes === "number" && alerta.diasRestantes < 0);
   if (!vencido) return respuesta;
