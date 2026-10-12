@@ -32,6 +32,12 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const mostrarValorDemanda = Boolean(causa) && Number(datos?.total_actuaciones) > 0;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
+  const cobertura = datos?.cobertura_documental;
+  const especializados = datos?.analisis_especializados;
+  const fuenteSentencia = especializados?.sentencia?.fuente || "No disponible";
+  const estadoSentencia = especializados?.sentencia?.determinacion || "NO_DETERMINABLE";
+  const fuenteMedidas = especializados?.cautelares?.fuente || "No disponible";
+  const estadoMedidas = especializados?.cautelares?.determinacion || "NO_DETERMINABLE";
   const actuaciones = datos?.actuaciones_recientes || [];
   const vectorDbStatus = datos?.vector_db_status || { activo: false, precedentes: [] };
   // La indexacion en Upstash sigue ocurriendo por detras (la usa el chat); la
@@ -1397,6 +1403,17 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           </div>
         </div>
 
+        <!-- FASE A: integridad observable; nunca se confunde recuperar actuaciones con leer todos los PDF -->
+        ${cobertura ? `
+        <div class="card" role="region" aria-label="Cobertura y fuentes del análisis">
+          <div class="card-title">📋 Cobertura y fuentes del análisis judicial</div>
+          <p><strong>Actuaciones recuperadas:</strong> ${escapeHtml(cobertura.actuacionesRecuperadas)}.
+          <strong>Información parcial:</strong> ${cobertura.actuacionesParciales ? 'Sí, revisar faltantes' : 'Sin errores parciales informados'}.</p>
+          <p><strong>Documentos PDF:</strong> No inventariados de forma exhaustiva. Cobertura de lectura: desconocida.</p>
+          <p><strong>Sentencia:</strong> ${escapeHtml(estadoSentencia)} · Fuente: ${escapeHtml(fuenteSentencia)}.</p>
+          <p><strong>Medidas cautelares:</strong> ${escapeHtml(estadoMedidas)} · Fuente: ${escapeHtml(fuenteMedidas)}.</p>
+          <p style="font-size:12px;opacity:.85;">Los análisis especializados se limitan a su cobertura y no sustituyen la lectura íntegra de los documentos ni la revisión jurídica.</p>
+        </div>` : ''}
         <!-- INFORME DE INTELIGENCIA ARTIFICIAL CON BOTÓN DE COPIAR -->
         <div class="card">
           <div class="card-title">
