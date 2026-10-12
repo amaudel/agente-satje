@@ -30,3 +30,14 @@ test("paginación incremental no repite los adjuntos revisados",async()=>{
  assert.equal(requested.length,10);assert.equal(new Set(requested).size,10);
  } finally {globalThis.fetch=previous;}
 });
+
+test("SATJE sin campo tieneDocumento: consulta los adjuntos de la actuación en vez de declarar cero", async () => {
+ const before=globalThis.fetch;
+ globalThis.fetch=(async()=>new Response(JSON.stringify({success:true,data:[{id:"doc-1"}]}),{status:200})) as typeof fetch;
+ try {
+  const result=await inventariarAdjuntos({causa:"01333202310725",baseUrl:"https://satje.test",headers:{},actuaciones:[{codigoActuacion:231976491,tipo:"OFICIO"}]});
+  assert.equal(result.actuacionesRevisadas,1);
+  assert.equal(result.documentosEncontrados,1);
+  assert.equal(result.estado,"COMPLETO");
+ } finally {globalThis.fetch=before;}
+});
