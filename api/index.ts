@@ -245,7 +245,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         const actuaciones = extraerTodasLasActuaciones(fuente);
         const codigosRaw = req.query.codigos;
         const listaCodigos = typeof codigosRaw === "string" ? codigosRaw.split(",") : [];
-        if (listaCodigos.length > 4 || listaCodigos.some(c => !/^\\d{1,16}$/.test(c))) {
+        if (listaCodigos.length > 4 || listaCodigos.some(c => !/^[0-9]{1,16}$/.test(c))) {
           return res.status(400).json({ok:false,error:"Máximo cuatro códigos numéricos por reintento"});
         }
         const retryMode = listaCodigos.length > 0;
