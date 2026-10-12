@@ -3,7 +3,7 @@ export function verificarIdentidadDeprecatorio(actuaciones: any[], textoDeprecad
   const norm=(s:string)=>s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toUpperCase();
   const dep=norm(textoDeprecado || "");
   if(!dep) return {estado:"INDETERMINADO",evidencia:"Sin texto del deprecatorio para comparar"};
-  const extraer=(v:string)=>v.match(/COOPERATIVA DE AHORRO Y CREDITO\\s+([A-Z0-9 ]{2,50}?)\\s+LTDA\\b/)?.[1]?.trim() || null;
+  const extraer=(v:string)=>v.match(/COOPERATIVA DE AHORRO Y CREDITO\s+([A-Z0-9 ]{2,50}?)\s+LTDA\b/)?.[1]?.trim() || null;
   const principal=actuaciones.filter(a=>/CUENCA/.test(norm(String(a.nombreJudicatura||"")))).map(a=>norm(String(a.actividad||""))).join(" ");
   const identPrincipal=extraer(principal);
   const identDep=extraer(dep);
