@@ -304,7 +304,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         var pending=Object.values(state.items).filter(function(x){return !!x.error;}).length;
         output.textContent+=' Persisten '+pending+' consultas fallidas. Los PDF no se han leído.';
       } catch(e) {
-        output.textContent+=' Recuperación interrumpida: '+String(e.message||e)+'. Se conservaron los resultados; puedes reintentar.';
+        output.textContent='Recuperación interrumpida: '+String(e.message||e)+'. Los resultados anteriores permanecen guardados; puedes reintentar.';
       } finally {output.dataset.running='0';}
     };
 
