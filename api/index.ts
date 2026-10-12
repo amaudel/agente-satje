@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+import type { VercelRequest, VercelResponse } from "../lib/vercel-http-types.js";
 import OpenAI from "openai";
 import {
   CATEGORIAS_INDICADORES,
