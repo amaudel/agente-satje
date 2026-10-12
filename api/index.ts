@@ -111,7 +111,7 @@ Analiza las actuaciones y responde con precisión:
       { role: "system", content: promptSistema },
       {
         role: "user",
-        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Inscrita: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Abandono (COGEP): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días restantes)\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Abandono (COGEP): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días restantes)\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
       },
     ],
     temperature: 0.2,
