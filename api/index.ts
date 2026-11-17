@@ -32,6 +32,12 @@ import {
 import { consultarLimite, registrarFallo, limpiarLimite, ipDelCliente } from "../lib/rate-limit.js";
 import { mapConcurrente } from "../lib/concurrencia.js";
 import { CHAT_TOOLS, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
+import {
+  REGLA_DATOS_NO_INSTRUCCIONES,
+  ejecutarBucleChat,
+  mensajeDatosExpediente,
+  mensajeErrorPublico,
+} from "../lib/chat-guard.js";
 
 // --- Limite de intentos fallidos de login (best-effort: ver lib/rate-limit.ts) ---
 const LOGIN_VENTANA_SEGUNDOS = 300;
@@ -102,7 +108,7 @@ Analiza las actuaciones y responde con precisión:
 2. Revisa e indica si existe SENTENCIA emitida en el expediente.
 3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
 4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
-5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.`;
+5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.\n${REGLA_DATOS_NO_INSTRUCCIONES}`;
 
   const ed = resultado.evidenciaDeprecatorio;
   const evidenciaResumen = ed
@@ -218,6 +224,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // 2. ENDPOINT DE CHAT LEGAL DE IA
     if (req.query.action === "chat" || bodyData.action === "chat" || (req.method === "POST" && bodyData.prompt)) {
+      // Vercel corta la funcion a los 60 s (vercel.json): se deja margen.
+      const limiteChatMs = Date.now() + 52000;
       const promptTexto = bodyData.prompt || req.query.prompt || "";
       const causaSolicitada = bodyData.causa || bodyData.causaContext?.causa || "";
 
@@ -258,7 +266,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             };
           }
         } catch (eCtx: any) {
-          contextoExpediente = { causa: causaSolicitada, error: "No se pudo cargar el expediente: " + (eCtx?.message || String(eCtx)) };
+          contextoExpediente = { causa: causaSolicitada, error: "No se pudo cargar el expediente: " + mensajeErrorPublico(eCtx, "chat-contexto") };
         }
       }
 
@@ -276,51 +284,34 @@ Si el contexto o el resultado de una herramienta trae un campo "error", dilo cla
 Tienes herramientas para consultar resoluciones, leer el texto de los documentos adjuntos a una actuación, o consultar otra causa distinta — úsalas cuando la pregunta lo requiera en vez de decir que no tienes esa información.
 Si te preguntan por datos de las partes (demandado, actor, cuantía/valor de la demanda, tipo de procedimiento, asunto), usa leer_documento_actuacion sobre la actuación tipo "CARATULA DE JUICIO" (normalmente la primera actuación del proceso, revisa el listado de actuaciones del contexto para encontrar su codigoActuacion) — ahí está la ficha estructurada del caso. Si esa carátula no trae la cuantía u otro dato puntual, dilo claramente en vez de inventarlo; ese dato puede no estar digitalizado en SATJE para ese proceso.
 Si te preguntan por la fecha exacta de inscripción/registro de una medida cautelar (o cualquier dato puntual del oficio/certificado registral que no venga ya resuelto en medidaCautelar.fechaInscripcion), usa leer_documento_actuacion con el codigoActuacion de medidaCautelar.fuente.codigoActuacion (si existe en el contexto) para leer el oficio o certificado real en vez de solo el resumen. Esa actuación puede traer varios documentos (el oficio y su certificado adjunto); revisa todos los que te devuelva la herramienta antes de responder.
-Contexto del Expediente en Inspección (incluye actuaciones reales, hasta 30 mas recientes):
-${JSON.stringify(contextoExpediente, null, 2)}`,
+${REGLA_DATOS_NO_INSTRUCCIONES}
+El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y </expediente>.`,
           },
+          mensajeDatosExpediente(contextoExpediente),
           { role: "user", content: String(promptTexto) },
         ];
 
-        let respuestaIa = "Sin respuesta del modelo.";
-        const MAX_TURNOS_HERRAMIENTAS = 4;
-
-        for (let turno = 0; turno < MAX_TURNOS_HERRAMIENTAS; turno++) {
-          const completion = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages,
-            tools: CHAT_TOOLS,
-            temperature: 0.3,
-            max_tokens: 1000,
-          });
-
-          const mensaje = completion.choices[0]?.message;
-          if (!mensaje) break;
-
-          if (mensaje.tool_calls && mensaje.tool_calls.length > 0) {
-            messages.push(mensaje);
-            for (const toolCall of mensaje.tool_calls) {
-              let args: any = {};
-              try {
-                args = JSON.parse(toolCall.function.arguments || "{}");
-              } catch (eArgs) {}
-              const resultadoHerramienta = await ejecutarHerramientaChat(toolCall.function.name, args, toolCtx);
-              messages.push({
-                role: "tool",
-                tool_call_id: toolCall.id,
-                content: JSON.stringify(resultadoHerramienta).slice(0, 8000),
-              });
-            }
-            continue;
-          }
-
-          respuestaIa = mensaje.content || "Sin respuesta del modelo.";
-          break;
-        }
+        const respuestaIa = await ejecutarBucleChat({
+          messages,
+          maxTurnos: 4,
+          limiteMs: limiteChatMs,
+          reservaRespuestaMs: 10000,
+          llamarModelo: async (msgs, conHerramientas) => {
+            const completion = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: msgs,
+              ...(conHerramientas ? { tools: CHAT_TOOLS } : {}),
+              temperature: 0.3,
+              max_tokens: 1000,
+            });
+            return completion.choices[0]?.message as any;
+          },
+          ejecutarHerramienta: (nombre, args) => ejecutarHerramientaChat(nombre, args, toolCtx),
+        });
 
         return res.status(200).json({ ok: true, respuesta: respuestaIa });
       } catch (errChat: any) {
-        return res.status(500).json({ ok: false, error: errChat.message || String(errChat) });
+        return res.status(500).json({ ok: false, error: mensajeErrorPublico(errChat, "chat") });
       }
     }
 
@@ -402,7 +393,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           advertenciaBusqueda: completitud.motivos.join("; "),
         });
       } catch (errReinicio: any) {
-        return res.status(500).json({ ok: false, error: errReinicio?.message || String(errReinicio) });
+        return res.status(500).json({ ok: false, error: mensajeErrorPublico(errReinicio, "buscar-reinicio") });
       }
     }
 
@@ -657,7 +648,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
           datosIncompletos: r.datosIncompletos,
         });
       } catch (errEstado: any) {
-        return res.status(500).json({ ok: false, error: errEstado?.message || String(errEstado) });
+        return res.status(500).json({ ok: false, error: mensajeErrorPublico(errEstado, "estado") });
       }
     }
 
@@ -751,7 +742,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         console.log(`[valor] causa=${r.causa} modelo_encontrado=${propuesta?.encontrado === true} aceptado=${resultadoValor.encontrado}${resultadoValor.encontrado ? "" : " motivo=" + resultadoValor.motivo}`);
         return res.status(200).json({ ok: true, ...resultadoValor });
       } catch (errValor: any) {
-        return res.status(500).json({ ok: false, error: errValor?.message || String(errValor) });
+        return res.status(500).json({ ok: false, error: mensajeErrorPublico(errValor, "valor") });
       }
     }
 
@@ -780,7 +771,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
         const resumen = await generarResumenIA(openaiKey, resultadoResumen);
         return res.status(200).json({ ok: true, resumen });
       } catch (errResumen: any) {
-        return res.status(500).json({ ok: false, error: errResumen?.message || String(errResumen) });
+        return res.status(500).json({ ok: false, error: mensajeErrorPublico(errResumen, "resumen-ia") });
       }
     }
 
@@ -1066,7 +1057,7 @@ ${JSON.stringify(contextoExpediente, null, 2)}`,
     return res.status(500).json({
       ok: false,
       error: "Error interno en Vercel Serverless Function",
-      mensaje: globalErr?.message || String(globalErr),
+      mensaje: mensajeErrorPublico(globalErr, "global"),
     });
   }
 }

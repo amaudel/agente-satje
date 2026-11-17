@@ -15,6 +15,7 @@ import {
   parseCookies,
   generarLoginHTML,
 } from "../lib/auth.js";
+import { REGLA_DATOS_NO_INSTRUCCIONES, mensajeErrorPublico } from "../lib/chat-guard.js";
 import { consultarLimite, registrarFallo, limpiarLimite } from "../lib/rate-limit.js";
 
 export interface Env {
@@ -263,7 +264,9 @@ Formato requerido del reporte:
 1. 📌 **Resumen General**: Estado actual de la causa en 2-3 oraciones.
 2. ⚠️ **Alertas e Indicadores**: Medidas cautelares, embargos, prohibición de enajenar o riesgos detectados.
 3. 🗓️ **Últimas Providencias Relevantes**: Resumen de lo más reciente.
-4. 💡 **Próxima Acción Sugerida**: Qué debería vigilar el abogado a continuación.`;
+4. 💡 **Próxima Acción Sugerida**: Qué debería vigilar el abogado a continuación.
+
+${REGLA_DATOS_NO_INSTRUCCIONES}`;
 
           const muestraActuaciones = actuaciones.slice(0, 25);
 
@@ -283,7 +286,7 @@ Formato requerido del reporte:
           resumenIA = completion.choices[0]?.message?.content || "Sin respuesta del modelo.";
         } catch (errOpenAi: any) {
           console.error("Error al consultar OpenAI:", errOpenAi);
-          resumenIA = `Error al generar resumen IA: ${errOpenAi.message || errOpenAi}`;
+          resumenIA = `Error al generar resumen IA: ${mensajeErrorPublico(errOpenAi, "worker-resumen")}`;
         }
       }
 
@@ -318,7 +321,7 @@ Formato requerido del reporte:
           ok: false,
           causa: causaLimpia,
           error: "Error interno al procesar la causa",
-          mensaje: error.message || String(error),
+          mensaje: mensajeErrorPublico(error, "worker"),
         }, null, 2),
         { status: 500, headers: corsHeaders }
       );
