@@ -174,3 +174,31 @@ export function mensajeErrorPublico(err: unknown, contexto = "chat"): string {
   if (estado === 401 || estado === 403) return "El servicio de IA rechazo la configuracion del servidor. Avisa al administrador.";
   return "Ocurrio un error interno. Intenta de nuevo; si persiste, avisa al administrador.";
 }
+
+export const MAX_MENSAJES_HISTORIAL = 10;
+export const MAX_CHARS_MENSAJE_HISTORIAL = 4000;
+
+/**
+ * Limpia el historial que envia el navegador: solo turnos "user"/"assistant"
+ * con texto, los ultimos MAX_MENSAJES_HISTORIAL y cada uno recortado. Nunca
+ * se aceptan mensajes "system" ni "tool" desde el cliente.
+ */
+export function sanitizarHistorial(raw: unknown): Array<{ role: "user" | "assistant"; content: string }> {
+  if (!Array.isArray(raw)) return [];
+  const limpios: Array<{ role: "user" | "assistant"; content: string }> = [];
+  for (const item of raw) {
+    const role = (item as any)?.role;
+    const content = (item as any)?.content;
+    if ((role !== "user" && role !== "assistant") || typeof content !== "string") continue;
+    const texto = content.trim();
+    if (!texto) continue;
+    limpios.push({ role, content: recortarTexto(texto, MAX_CHARS_MENSAJE_HISTORIAL) });
+  }
+  return limpios.slice(-MAX_MENSAJES_HISTORIAL);
+}
+
+/** Valida un numero de causa recibido del navegador (solo letras, digitos y guiones). */
+export function causaValida(raw: unknown): string {
+  const texto = typeof raw === "string" ? raw.trim() : "";
+  return /^[A-Za-z0-9-]{5,40}$/.test(texto) ? texto : "";
+}

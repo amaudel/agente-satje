@@ -37,6 +37,8 @@ import {
   ejecutarBucleChat,
   mensajeDatosExpediente,
   mensajeErrorPublico,
+  sanitizarHistorial,
+  causaValida,
 } from "../lib/chat-guard.js";
 
 // --- Limite de intentos fallidos de login (best-effort: ver lib/rate-limit.ts) ---
@@ -227,7 +229,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Vercel corta la funcion a los 60 s (vercel.json): se deja margen.
       const limiteChatMs = Date.now() + 52000;
       const promptTexto = bodyData.prompt || req.query.prompt || "";
-      const causaSolicitada = bodyData.causa || bodyData.causaContext?.causa || "";
+      const causaSolicitada = causaValida(bodyData.causa) || causaValida(bodyData.causaContext?.causa) || "";
+      // Memoria de la conversacion: el navegador reenvia los ultimos turnos.
+      const historialChat = sanitizarHistorial(bodyData.historial);
 
       if (!promptTexto) {
         return res.status(200).json({ ok: true, respuesta: "👋 ¡Hola! Soy tu Asistente Legal. Escribe una pregunta sobre la causa o selecciona uno de los chips de acción." });
@@ -285,11 +289,17 @@ Tienes herramientas para consultar resoluciones, leer el texto de los documentos
 Si te preguntan por datos de las partes (demandado, actor, cuantía/valor de la demanda, tipo de procedimiento, asunto), usa leer_documento_actuacion sobre la actuación tipo "CARATULA DE JUICIO" (normalmente la primera actuación del proceso, revisa el listado de actuaciones del contexto para encontrar su codigoActuacion) — ahí está la ficha estructurada del caso. Si esa carátula no trae la cuantía u otro dato puntual, dilo claramente en vez de inventarlo; ese dato puede no estar digitalizado en SATJE para ese proceso.
 Si te preguntan por la fecha exacta de inscripción/registro de una medida cautelar (o cualquier dato puntual del oficio/certificado registral que no venga ya resuelto en medidaCautelar.fechaInscripcion), usa leer_documento_actuacion con el codigoActuacion de medidaCautelar.fuente.codigoActuacion (si existe en el contexto) para leer el oficio o certificado real en vez de solo el resumen. Esa actuación puede traer varios documentos (el oficio y su certificado adjunto); revisa todos los que te devuelva la herramienta antes de responder.
 ${REGLA_DATOS_NO_INSTRUCCIONES}
-El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y </expediente>.`,
+El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y </expediente>. Despues vienen los mensajes anteriores de esta conversacion: usalos para entender a que se refiere el usuario (por ejemplo "ese proceso", "la demanda", "el juez").`,
           },
           mensajeDatosExpediente(contextoExpediente),
+          ...historialChat,
           { role: "user", content: String(promptTexto) },
         ];
+
+        // Si durante la conversacion se consulta otra causa, pasa a ser la
+        // causa activa: se usa por defecto en las siguientes herramientas y se
+        // devuelve al navegador para el proximo mensaje.
+        let causaActiva = causaSolicitada;
 
         const respuestaIa = await ejecutarBucleChat({
           messages,
@@ -306,10 +316,18 @@ El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y 
             });
             return completion.choices[0]?.message as any;
           },
-          ejecutarHerramienta: (nombre, args) => ejecutarHerramientaChat(nombre, args, toolCtx),
+          ejecutarHerramienta: async (nombre, args) => {
+            const resultado = await ejecutarHerramientaChat(nombre, args, toolCtx);
+            const otra = nombre === "buscar_otra_causa" ? causaValida((resultado as any)?.causa) : "";
+            if (otra && !(resultado as any)?.error) {
+              causaActiva = otra;
+              toolCtx.causaActual = otra;
+            }
+            return resultado;
+          },
         });
 
-        return res.status(200).json({ ok: true, respuesta: respuestaIa });
+        return res.status(200).json({ ok: true, respuesta: respuestaIa, causaActiva: causaActiva || null });
       } catch (errChat: any) {
         return res.status(500).json({ ok: false, error: mensajeErrorPublico(errChat, "chat") });
       }

@@ -172,6 +172,9 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       msgs.scrollTop = msgs.scrollHeight;
 
       var causaActualUrl = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      // Memoria de la conversacion: ultimos turnos y la causa de la que se habla.
+      window.chatHistorial = window.chatHistorial || [];
+      if (!window.chatCausaActiva) window.chatCausaActiva = causaActualUrl || '';
 
       fetch('/?action=chat', {
         method: 'POST',
@@ -179,12 +182,17 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
         body: JSON.stringify({
           action: 'chat',
           prompt: promptTexto,
-          causa: causaActualUrl
+          causa: window.chatCausaActiva || causaActualUrl,
+          historial: window.chatHistorial.slice(-10)
         })
       })
       .then(function(r) { return r.json(); })
       .then(function(res) {
         if (res.ok && res.respuesta) {
+          window.chatHistorial.push({ role: 'user', content: promptTexto });
+          window.chatHistorial.push({ role: 'assistant', content: String(res.respuesta) });
+          if (window.chatHistorial.length > 20) window.chatHistorial = window.chatHistorial.slice(-20);
+          if (res.causaActiva) window.chatCausaActiva = res.causaActiva;
           var formatted = esc(res.respuesta)
             .replace(/\\*\\*(.*?)\\*\\*/g, '<strong>$1</strong>')
             .replace(/\\n\\n/g, '<br/><br/>')
