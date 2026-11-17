@@ -145,7 +145,15 @@ export async function procesarCausaIndividual(
       },
       TIMEOUT_AGENT_MS
     );
-    if (rAgent) actuaciones = rAgent;
+    if (rAgent) {
+      actuaciones = rAgent;
+      // agent/satje solo devuelve las ultimas actuaciones (maximo 20): con
+      // esa lista la etapa y la alerta pueden salir distintas a las reales.
+      // Se marca como incompleta para avisar al usuario y no guardarla en cache.
+      if (rAgent.length > 0) {
+        erroresParciales.push({ code: "ACTUACIONES_RESUMIDAS", stage: "agent/satje", retryable: true });
+      }
+    }
   }
 
   if (actuaciones.length === 0 && causaFormateada !== causaSinGuiones) {
@@ -191,7 +199,13 @@ export async function procesarCausaIndividual(
   const riesgo = await riesgoEspecializadoPromise;
   let alertaAbandono = alertaLocal;
   let evidenciaDeprecatorio: { estado: string; codigoActuacion: string; fechaActuacion: string; documentoReferencia: string; documentosConsultados: number; documentosFallidos: number } | null = null;
-  if (riesgo?.alertaGeneral && riesgo?.relojProcesoPrincipal) {
+  // Con sentencia (Art. 247 COGEP) o abandono ya declarado por el juez, el
+  // resultado local es definitivo: los relojes de la API no deben pisarlo,
+  // porque mostrarian un "VENCIDO" en un juicio que ya termino.
+  const localDefinitivo = alertaLocal.nivel === "improcedente" || alertaLocal.nivel === "abandonada";
+  if (localDefinitivo) {
+    alertaAbandono = alertaLocal;
+  } else if (riesgo?.alertaGeneral && riesgo?.relojProcesoPrincipal) {
     const principal = riesgo.relojProcesoPrincipal;
     const deprecada = riesgo.relojUnidadDeprecada;
     const general = riesgo.alertaGeneral;
@@ -239,7 +253,7 @@ export async function procesarCausaIndividual(
         explicacion: discrepancia ? `⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: las partes del deprecatorio presentan discordancias. ${avisoDoc} El efecto procesal debe evaluarse por separado.` : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
       };
     }
-  } else if (alertaLocal.nivel !== "abandonada" && alertaLocal.nivel !== "improcedente") {
+  } else {
     alertaAbandono = {
       ...alertaLocal,
       etiqueta: "⚠️ Cálculo local provisional (API especializada no disponible)",

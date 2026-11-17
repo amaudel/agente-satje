@@ -125,3 +125,43 @@ test("timeout especializado: advierte que el cálculo local es provisional", asy
     assert.match(r.alertaAbandonoObjeto.etiqueta, /provisional/);
   } finally { globalThis.fetch = original; }
 });
+
+// Caso real 01333-2025-08870: sentencia (10-sep-2026) y razon de ejecutoria,
+// pero la API marcaba VENCIDO por un deprecatorio ya devuelto cumplido.
+test("con sentencia, el VENCIDO de la API no pisa el 'improcedente' local", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("/abandono/riesgo")) return new Response(JSON.stringify({
+      success: true, analysisStatus: "COMPLETE", partial: false,
+      alertaGeneral: { ambitoMasCercano: "unidad_deprecada", diasRestantes: -5, fechaReferencialAbandono: "2026-11-11" },
+      relojProcesoPrincipal: { ultimaActuacion: { fecha: "2026-09-25" } },
+      relojUnidadDeprecada: { ultimaActuacion: { fecha: "2026-05-11", actividadResumen: "DEVOLUCION DEPRECATORIO POR CUMPLIMIENTO DE DILIGENCIA" } },
+    }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, partialErrors: [], incidentes: [{ nombreJudicatura: "CUENCA", actuaciones: [
+      { codigo: 3, fecha: "2026-09-25T10:00:00.000+00:00", tipo: "RAZON DE EJECUTORIA" },
+      { codigo: 2, fecha: "2026-09-10T10:00:00.000+00:00", tipo: "SENTENCIA" },
+      { codigo: 1, fecha: "2025-06-01T10:00:00.000+00:00", tipo: "CARATULA DE JUICIO" },
+    ] }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const r: any = await procesarCausaIndividual("01333-2025-08870", "https://backend.test", "k");
+    assert.equal(r.poseeSentencia, true);
+    assert.equal(r.alertaAbandonoObjeto.nivel, "improcedente");
+    assert.doesNotMatch(r.alertaAbandonoObjeto.etiqueta, /VENCIDO/);
+  } finally { globalThis.fetch = original; }
+});
+
+test("si solo responde el resumen del agente (20 actuaciones), se marca incompleto", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    const u = String(url);
+    if (u.includes("/abandono/riesgo")) return new Response("x", { status: 504 });
+    if (u.includes("/agent/satje")) return new Response(JSON.stringify({ success: true, incidentes: [{ actuaciones: [{ fecha: "2026-09-01", tipo: "AUDIENCIA UNICA" }] }] }), { status: 200 });
+    return new Response("upstream", { status: 502 });
+  }) as typeof fetch;
+  try {
+    const r: any = await procesarCausaIndividual("01333-2025-08870", "https://backend.test", "k");
+    assert.equal(r.datosIncompletos, true);
+    assert.ok(r.erroresParciales.some((e: any) => e.code === "ACTUACIONES_RESUMIDAS"));
+  } finally { globalThis.fetch = original; }
+});
