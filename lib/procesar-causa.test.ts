@@ -165,3 +165,20 @@ test("si solo responde el resumen del agente (20 actuaciones), se marca incomple
     assert.ok(r.erroresParciales.some((e: any) => e.code === "ACTUACIONES_RESUMIDAS"));
   } finally { globalThis.fetch = original; }
 });
+
+test("si el juez ya nego un abandono, la alerta lo menciona", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("/abandono/riesgo")) return new Response(JSON.stringify({
+      success: true, analysisStatus: "COMPLETE", partial: false,
+      alertaGeneral: { ambitoMasCercano: "proceso_principal", diasRestantes: -436, fechaReferencialAbandono: "2025-09-07" },
+      relojProcesoPrincipal: { ultimaActuacion: { fecha: "2025-03-06" } },
+      advertencias: ["El juez ya declaro improcedente un pedido de abandono el 2025-02-25: revise si la demora sigue dependiendo del juzgado o de una diligencia deprecada."],
+    }), { status: 200 });
+    return new Response(JSON.stringify({ success: true, partialErrors: [], incidentes: [{ actuaciones: [{ fecha: "2025-03-06", tipo: "RAZON" }] }] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const r: any = await procesarCausaIndividual("01333-2023-10725", "https://backend.test", "k");
+    assert.match(r.alertaAbandonoObjeto.explicacion, /improcedente un pedido de abandono el 2025-02-25/);
+  } finally { globalThis.fetch = original; }
+});

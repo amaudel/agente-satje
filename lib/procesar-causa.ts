@@ -234,6 +234,9 @@ export async function procesarCausaIndividual(
       : evidenciaDoc?.estado === "DOCUMENTO_INACCESIBLE"
       ? "PDF del deprecatorio inaccesible o extracción incompleta; no hay verificación documental concluyente."
       : discrepancia ? "No se obtuvo evidencia suficiente para aclarar la discrepancia de partes." : "";
+    const avisoJuez = (Array.isArray(riesgo?.advertencias) ? riesgo.advertencias : [])
+      .map((a: any) => String(a))
+      .find((a: string) => a.includes("improcedente un pedido de abandono")) || "";
     const determinante = general.ambitoMasCercano === "unidad_deprecada" ? deprecada : principal;
     const dias = Number(general.diasRestantes);
     const vencido = dias <= 0;
@@ -250,7 +253,8 @@ export async function procesarCausaIndividual(
         relojDeprecatorioInfo: deprecada
           ? `Fuente API SATJE (dos relojes): principal ${principal?.ultimaActuacion?.fecha || "N/A"}; deprecado ${deprecada?.ultimaActuacion?.fecha || "N/A"}; determinante ${general.ambitoMasCercano}. ${discrepancia ? `⚠️ Deprecatorio con identidad procesal por verificar: el oficio menciona distinta parte actora. ${avisoDoc} No usar este reloj para conclusiones jurídicas definitivas sin validar su efecto procesal.` : ""}`
           : undefined,
-        explicacion: discrepancia ? `⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: las partes del deprecatorio presentan discordancias. ${avisoDoc} El efecto procesal debe evaluarse por separado.` : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.",
+        explicacion: (discrepancia ? `⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: las partes del deprecatorio presentan discordancias. ${avisoDoc} El efecto procesal debe evaluarse por separado.` : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.")
+          + (avisoJuez ? ` ⚖️ ${avisoJuez}` : ""),
       };
     }
   } else {
