@@ -1052,6 +1052,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     .crono-chip { min-height: 40px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: #e2e8f0; font: inherit; font-size: 0.88rem; cursor: pointer; }
     .crono-chip[aria-pressed="true"] { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 800; }
     .crono-item { display: flex; gap: 0.9rem; padding: 0.8rem 0; border-bottom: 1px solid var(--border); }
+    .crono-item[hidden], #cronoLista [hidden] { display: none !important; }
     .crono-fecha { flex: 0 0 8.5rem; font-size: 0.85rem; color: var(--text-muted); }
     .crono-punto { flex: 0 0 auto; width: 10px; height: 10px; margin-top: 0.45rem; border-radius: 50%; background: #475569; }
     .crono-item.hito .crono-punto { background: var(--accent); box-shadow: 0 0 0 4px rgba(56,189,248,0.15); }

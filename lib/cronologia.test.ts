@@ -27,3 +27,9 @@ test("notas de la memoria, la mas reciente primero", () => {
   assert.deepEqual(n, [{ fecha: "2026-11-18", texto: "segunda" }, { fecha: "2026-11-17", texto: "primera" }]);
   assert.deepEqual(notasDeMemoria(""), []);
 });
+
+test("el estilo de la cronologia respeta el atributo hidden (si no, los filtros no ocultan nada)", async () => {
+  const { generarDashboardHTML } = await import("./dashboard-html.js");
+  const html = generarDashboardHTML({ causa: "01333-2023-10725", total_actuaciones: 1, actuaciones_recientes: [{ fecha: "2025-07-21", tipo: "OFICIO", actividad: "x", nombreJudicatura: "UNIDAD JUDICIAL CIVIL CUENCA" }] });
+  assert.match(html, /\.crono-item\[hidden\][^{]*\{\s*display:\s*none/);
+});
