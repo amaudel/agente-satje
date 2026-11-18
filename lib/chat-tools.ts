@@ -1,4 +1,5 @@
 import { procesarCausaIndividual } from "./procesar-causa.js";
+import { alertaParaIA } from "./resumen-rapido.js";
 import { buscarEnMemoria, guardarNotaCausa, leerNotaCausa, type ConfigMemoria } from "./memoria.js";
 
 // Timeouts de red contra el backend SATJE: sin esto una lentitud del VPS
@@ -186,7 +187,7 @@ export async function ejecutarHerramientaChat(name: string, args: any, ctx: Chat
         etapaProcesalEspecifica: resultado.etapaProcesalEspecifica,
         poseeSentencia: resultado.poseeSentencia,
         medidaCautelar: resultado.cicloVidaMedida,
-        alertaAbandono: resultado.alertaAbandonoObjeto,
+        alertaAbandono: alertaParaIA(resultado.alertaAbandonoObjeto),
         totalActuaciones: resultado.totalActuaciones,
         actuaciones: resultado.actuaciones.slice(0, 20),
       };

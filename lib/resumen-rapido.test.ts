@@ -40,3 +40,12 @@ test("con sentencia el abandono no corre", () => {
   assert.equal(r.filas[2].tono, "favor");
   assert.match(r.siguientePaso.texto, /ejecuci/);
 });
+
+test("a la IA no le llega el 999 de 'no aplica' como si fueran dias", async () => {
+  const { alertaParaIA } = await import("./resumen-rapido.js");
+  const r = alertaParaIA({ nivel: "improcedente", diasRestantes: 999, porcentajeGauge: 100, etiqueta: "⚪ Improcedente" });
+  assert.equal(r.diasRestantes, "no aplica");
+  assert.doesNotMatch(JSON.stringify(r), /999/);
+  const normal = { nivel: "normal", diasRestantes: 128 };
+  assert.equal(alertaParaIA(normal), normal);
+});

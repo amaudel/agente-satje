@@ -33,7 +33,21 @@ import { consultarLimite, registrarFallo, limpiarLimite, ipDelCliente } from "..
 import { mapConcurrente } from "../lib/concurrencia.js";
 import { CHAT_TOOLS, CHAT_TOOLS_MEMORIA, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
 import { configMemoria, leerNotaCausa } from "../lib/memoria.js";
-import { fechaLegible, juezNegoAbandono } from "../lib/resumen-rapido.js";
+import { alertaParaIA, fechaLegible, juezNegoAbandono } from "../lib/resumen-rapido.js";
+
+// Quien usa la app es la cooperativa: el analisis y el chat le hablan a ella.
+const PERSPECTIVA_COOPERATIVA = `PERSPECTIVA: escribes para el área legal de la Cooperativa de Ahorro y Crédito ERCO Ltda. (COOPERCO). Identifica en los datos si la cooperativa es parte actora (lo usual: cobra un crédito) o demandada. Si es actora, todo el análisis y las recomendaciones son para RECUPERAR EL CRÉDITO: qué falta para avanzar y qué puede pedir la cooperativa (citación, impulso, mandamiento de ejecución, liquidación, embargo o remate de la garantía, según la etapa). Con sentencia ejecutoriada, enfócate en la ejecución, no en defenderse. Habla de los demandados como deudores, no como tu cliente.`;
+
+/** Texto de la alerta para la IA: nunca un numero centinela (999) que parezca dias reales. */
+function textoAlertaParaIA(alerta: any): string {
+  if (alerta?.nivel === "improcedente") return "NO APLICA: hay sentencia en la causa, el abandono no procede (Art. 247 COGEP). No menciones riesgo de abandono.";
+  if (alerta?.nivel === "abandonada") return "El juez YA DECLARÓ el abandono de la causa.";
+  const dias = Number(alerta?.diasRestantes);
+  if (!Number.isFinite(dias) || Math.abs(dias) >= 900) return `${alerta?.etiqueta || "sin dato"} (sin conteo de días)`;
+  return dias < 0
+    ? `${alerta?.etiqueta || "vencida"}: ${Math.abs(dias)} días SOBRE el plazo referencial`
+    : `${alerta?.etiqueta || "vigilancia"}: quedan ${dias} días del plazo referencial`;
+}
 import {
   REGLA_DATOS_NO_INSTRUCCIONES,
   ejecutarBucleChat,
@@ -107,8 +121,9 @@ async function generarResumenIA(
 ): Promise<string> {
   const openai = new OpenAI({ apiKey: openaiKey });
   const promptSistema = `Eres un agente experto en análisis jurídico procesal en Ecuador (SATJE).
+${PERSPECTIVA_COOPERATIVA}
 La pantalla ya muestra en tarjetas la etapa, la sentencia, la medida cautelar con sus fechas y el riesgo de abandono: NO repitas esos datos en lista.
-Escribe un ANÁLISIS breve (entre 3 y 5 oraciones, un solo párrafo, sin títulos ni numeración) que diga: qué está frenando o moviendo el proceso, qué significa para la parte actora, y qué convendría revisar o hacer a continuación (en lenguaje condicional, pidiendo comprobar actuaciones y documentos antes de proponer escritos).\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. FORMATO: escribe para una abogada, en español claro; nunca muestres códigos internos (como INSCRIPCION_CONFIRMADA, OFICIADA, null, N/A, proceso_principal); escribe las fechas como "30 nov 2023"; si un dato no existe di "no consta". Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.\n${REGLA_DATOS_NO_INSTRUCCIONES}`;
+Escribe un ANÁLISIS breve (entre 3 y 5 oraciones, un solo párrafo, sin títulos ni numeración) que diga: qué está frenando o moviendo el proceso, qué significa para la parte actora, y qué convendría revisar o hacer a continuación (en lenguaje condicional, pidiendo comprobar actuaciones y documentos antes de proponer escritos).\nSi no se detectó medida cautelar, o el crédito tiene hipoteca, no presentes la falta de inscripción de una medida como un riesgo principal: a lo sumo sugiere verificar las garantías inscritas. REGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. FORMATO: escribe para una abogada, en español claro; nunca muestres códigos internos (como INSCRIPCION_CONFIRMADA, OFICIADA, null, N/A, proceso_principal); escribe las fechas como "30 nov 2023"; si un dato no existe di "no consta". Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.\n${REGLA_DATOS_NO_INSTRUCCIONES}`;
 
   const ed = resultado.evidenciaDeprecatorio;
   const evidenciaResumen = ed
@@ -122,7 +137,7 @@ Escribe un ANÁLISIS breve (entre 3 y 5 oraciones, un solo párrafo, sin título
       { role: "system", content: promptSistema },
       {
         role: "user",
-        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${resultado.alertaAbandono} (${resultado.diasRestantesAbandono} días referenciales)\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\nExplicación del indicador: ${resultado.alertaAbandonoObjeto.explicacion || "N/A"}\n${evidenciaResumen}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
+        content: `Número de Causa: ${resultado.causa}\nTotal Actuaciones: ${resultado.totalActuaciones}\nEtapa General: ${resultado.etapaProcesalGeneral}\nEtapa Específica: ${resultado.etapaProcesalEspecifica}\nPosee Sentencia: ${resultado.poseeSentencia ? "SÍ" : "NO"}\nMedida Cautelar Detectada: ${resultado.medidaDetectada ? "SÍ" : "NO"}\nEstado Ciclo Vida: ${cv.estadoCicloVida}\nConfianza: ${cv.confianza}\nFecha Orden Judicial: ${cv.fechaOrdenJudicial}\nFecha Oficio: ${cv.fechaOficio}\nFecha Inscripción Registral: ${resultado.fechaInscripcionMedida}\nEstrategia Sugerida: ${cv.recomendacionEstrategica}\nEstado Alerta Preventiva de Inactividad (NO declaratoria judicial): ${textoAlertaParaIA(resultado.alertaAbandonoObjeto)}\nFuente y contexto: ${resultado.alertaAbandonoObjeto.relojDeprecatorioInfo || "Comprobar expediente completo"}\nExplicación del indicador: ${resultado.alertaAbandonoObjeto.explicacion || "N/A"}\n${evidenciaResumen}\nLimitación de datos SATJE: ${resultado.datosIncompletos ? "CONSULTA PARCIAL, resultados no concluyentes" : "sin errores parciales reportados"}\n\nActuaciones recientes:\n${JSON.stringify(muestraActuaciones, null, 2)}`,
       },
     ],
     temperature: 0.2,
@@ -267,7 +282,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               poseeSentencia: resultado.poseeSentencia,
               fechaSentencia: resultado.fechaSentencia,
               medidaCautelar: resultado.cicloVidaMedida,
-              alertaAbandono: resultado.alertaAbandonoObjeto,
+              alertaAbandono: alertaParaIA(resultado.alertaAbandonoObjeto),
               totalActuaciones: resultado.totalActuaciones,
               actuaciones: resultado.actuaciones.slice(0, 30),
             };
@@ -288,6 +303,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           {
             role: "system",
             content: `Eres el Asistente Legal Virtual de Inteligencia Judicial para Ecuador (Agente SATJE).
+${PERSPECTIVA_COOPERATIVA}
 Tu función es asesorar a abogados, analizar expedientes, redactar borradores de escritos procesales (como impulso procesal del Art. 245 COGEP, revocatorias o recursos) y explicar el estado del expediente en lenguaje claro o técnico.
 Responde en formato Markdown bonito, con viñetas, negritas e íconos jurídicos.
 Si el contexto o el resultado de una herramienta trae un campo "error", dilo claramente al usuario en vez de inventar informacion del expediente.

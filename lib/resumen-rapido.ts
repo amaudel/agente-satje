@@ -139,3 +139,12 @@ export function construirResumenRapido(d: {
 
   return { filas, siguientePaso };
 }
+
+/** Copia de la alerta para mandar a la IA, sin el 999 interno de "no aplica". */
+export function alertaParaIA(alerta: any): any {
+  if (!alerta || typeof alerta !== "object") return alerta;
+  const dias = Number(alerta.diasRestantes);
+  if (Number.isFinite(dias) && Math.abs(dias) < 900) return alerta;
+  const { diasRestantes: _d, porcentajeGauge: _p, ...resto } = alerta;
+  return { ...resto, diasRestantes: "no aplica" };
+}
