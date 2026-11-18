@@ -1,4 +1,5 @@
 import type { ClasificacionEtapa, AnalisisCicloVidaMedida } from "./legal-analysis.js";
+import { construirResumenRapido, fechaLegible, juezNegoAbandono, type Tono } from "./resumen-rapido.js";
 
 // A2: escape de valores de usuario antes de interpolar en el HTML del dashboard.
 // `causa` llega via query string (/?causa=...) y normalizarNumeroCausa devuelve
@@ -68,7 +69,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   };
 
   const estadoBadgeClass: Record<string, string> = {
-    INSCRIPCION_CONFIRMADA: "danger",
+    INSCRIPCION_CONFIRMADA: "success",
     ORDENADA: "warning",
     OFICIADA: "warning",
     INSCRIPCION_NO_CONFIRMADA: "warning",
@@ -76,7 +77,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   };
 
   const estadoTextos: Record<string, string> = {
-    INSCRIPCION_CONFIRMADA: "🚨 CONFIRMADA",
+    INSCRIPCION_CONFIRMADA: "✅ INSCRITA",
     ORDENADA: "⚠️ ORDENADA",
     OFICIADA: "📨 OFICIADA",
     INSCRIPCION_NO_CONFIRMADA: "⚠️ NO CONFIRMADA",
@@ -93,6 +94,15 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     explicacion: 'Sin análisis',
     esDeprecatorio: false
   };
+
+  const resumenRapido = construirResumenRapido({ etapa, poseeSentencia, fechaSentencia, cautelar, abandono });
+  const claseTono: Record<Tono, string> = { favor: "success", curso: "warning", revisar: "orange", riesgo: "danger", neutral: "muted" };
+  const colorTono: Record<Tono, string> = { favor: "var(--success)", curso: "var(--warning)", revisar: "#fb923c", riesgo: "var(--danger)", neutral: "var(--text-muted)" };
+  const filaAbandono = resumenRapido.filas.find((f) => f.tema === "Abandono");
+  const tonoAbandono: Tono = filaAbandono?.tono || "neutral";
+  const etiquetaAbandono = juezNegoAbandono(abandono) && Number(abandono.diasRestantes) <= 0
+    ? "🟠 Revisar: el juez ya negó un abandono"
+    : String(abandono.etiqueta || "");
 
   const resumenHTML = escapeHtml(resumenIA)
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
@@ -990,7 +1000,17 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     .kpi-card:hover { transform: translateY(-2px); }
     .kpi-card.sentencia-no { border-left: 6px solid var(--warning); }
     .kpi-card.sentencia-si { border-left: 6px solid var(--success); }
-    .kpi-card.medida-vigente { border-left: 6px solid var(--danger); box-shadow: inset 0 0 30px rgba(244, 63, 94, 0.05); }
+    .kpi-card.medida-vigente { border-left: 6px solid var(--success); box-shadow: inset 0 0 30px rgba(16, 185, 129, 0.05); }
+    .kpi-tag.orange { background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid rgba(251, 146, 60, 0.3); }
+    .resumen-rapido { grid-column: 1 / -1; background: var(--card-bg); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 1.2rem; padding: 1.6rem 1.8rem; display: flex; flex-direction: column; gap: 1rem; }
+    .resumen-rapido h2 { margin: 0; font-size: 0.82rem; letter-spacing: 0.1em; color: var(--accent); font-weight: 800; }
+    .rr-fila { display: flex; gap: 0.9rem; align-items: flex-start; font-size: 1rem; color: #e2e8f0; line-height: 1.5; }
+    .rr-fila .kpi-tag { margin: 0.1rem 0 0; flex: 0 0 auto; min-width: 6.5rem; text-align: center; }
+    .rr-paso { display: flex; flex-wrap: wrap; align-items: center; gap: 0.8rem; padding: 1rem 1.1rem; border-radius: 0.9rem; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); }
+    .rr-paso span { flex: 1 1 320px; color: #e2e8f0; }
+    .rr-btn { min-height: 44px; padding: 0 1.1rem; border-radius: 0.7rem; font: inherit; font-weight: 700; cursor: pointer; border: 1px solid var(--border); background: transparent; color: #e2e8f0; }
+    .rr-btn.primario { background: var(--accent); color: #0b1220; border-color: var(--accent); }
+    @media (max-width: 640px) { .rr-fila { flex-direction: column; gap: 0.3rem; } }
     .kpi-card.medida-ordenada { border-left: 6px solid var(--warning); }
     .kpi-card.medida-levantada { border-left: 6px solid var(--success); }
     .kpi-card.medida-normal { border-left: 6px solid var(--text-muted); }
@@ -1188,6 +1208,22 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             </p>
           </div>` : ''}
 
+          <!-- RESUMEN EN 10 SEGUNDOS -->
+          <section class="resumen-rapido" aria-labelledby="rrTitulo">
+            <h2 id="rrTitulo">RESUMEN EN 10 SEGUNDOS${datosIncompletos ? ' · PROVISIONAL (DATOS INCOMPLETOS)' : ''}</h2>
+            ${resumenRapido.filas.map((f) => `
+            <div class="rr-fila">
+              <span class="kpi-tag ${claseTono[f.tono]}">${escapeHtml(f.etiqueta)}</span>
+              <span><strong>${escapeHtml(f.tema)}:</strong> ${escapeHtml(f.texto)}</span>
+            </div>`).join('')}
+            <div class="rr-paso">
+              <span><strong style="color:var(--accent);">Siguiente paso sugerido:</strong> ${escapeHtml(resumenRapido.siguientePaso.texto)}</span>
+              <button type="button" class="rr-btn primario" onclick="window.usarPromptChip(${escapeHtml(jsString(resumenRapido.siguientePaso.promptChat))})">Hacerlo con el chat</button>
+              <button type="button" class="rr-btn" onclick="window.toggleChat(event)">Preguntar al chat</button>
+            </div>
+            <span style="font-size:0.82rem; color:var(--text-muted);">Sugerencia automática a partir de los datos del SATJE. Verificar antes de presentar escritos.</span>
+          </section>
+
           <!-- PANEL DE CLASIFICACIÓN DE ETAPA PROCESAL -->
           <div class="kpi-card etapa-card">
             <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -1321,10 +1357,10 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           </div>
 
           <!-- PANEL 3: ALERTA PREVENTIVA DE ABANDONO PROCESAL (COGEP ART. 245, 246, 247) -->
-          <div class="kpi-card abandono-card">
+          <div class="kpi-card abandono-card" style="border-top-color: ${colorTono[tonoAbandono]};">
             <div style="display:flex; justify-content:space-between; align-items:center;">
-              <div class="kpi-tag ${abandono.badgeClass}">
-                ${escapeHtml(abandono.etiqueta)}
+              <div class="kpi-tag ${claseTono[tonoAbandono]}">
+                ${escapeHtml(etiquetaAbandono)}
               </div>
               <span style="font-size:0.82rem; font-weight:700; color:var(--text-muted);">Sustento Legal: COGEP Art. 245 - 247</span>
             </div>
@@ -1424,7 +1460,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             ${actuaciones.map((a: any) => `
               <div class="timeline-item">
                 <div class="timeline-header">
-                  <span>📅 ${escapeHtml(a.fecha || a.fechaProvidencia || a.fechaActuacion || 'Sin fecha')}</span>
+                  <span>📅 ${escapeHtml(fechaLegible(a.fecha || a.fechaProvidencia || a.fechaActuacion) || 'Sin fecha')}</span>
                   <span class="badge">${escapeHtml(a.tipo || 'ACTUACIÓN')}</span>
                 </div>
                 <div class="timeline-title">${escapeHtml(a.actividad || a.nombreActuacion || a.titulo || a.observacion || 'Actuación judicial')}</div>

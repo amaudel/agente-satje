@@ -33,6 +33,7 @@ import { consultarLimite, registrarFallo, limpiarLimite, ipDelCliente } from "..
 import { mapConcurrente } from "../lib/concurrencia.js";
 import { CHAT_TOOLS, CHAT_TOOLS_MEMORIA, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
 import { configMemoria, leerNotaCausa } from "../lib/memoria.js";
+import { fechaLegible, juezNegoAbandono } from "../lib/resumen-rapido.js";
 import {
   REGLA_DATOS_NO_INSTRUCCIONES,
   ejecutarBucleChat,
@@ -111,7 +112,7 @@ Analiza las actuaciones y responde con precisión:
 2. Revisa e indica si existe SENTENCIA emitida en el expediente.
 3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
 4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
-5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.\n${REGLA_DATOS_NO_INSTRUCCIONES}`;
+5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. FORMATO: escribe para una abogada, en español claro; nunca muestres códigos internos (como INSCRIPCION_CONFIRMADA, OFICIADA, null, N/A, proceso_principal); escribe las fechas como "30 nov 2023"; si un dato no existe di "no consta". Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.\n${REGLA_DATOS_NO_INSTRUCCIONES}`;
 
   const ed = resultado.evidenciaDeprecatorio;
   const evidenciaResumen = ed
@@ -135,7 +136,7 @@ Analiza las actuaciones y responde con precisión:
   const respuestaModelo = completion.choices[0]?.message?.content || "Sin respuesta del modelo.";
   // Trazabilidad determinista: no depende de que el modelo recuerde citar la fuente.
   const notaDocumento = ed
-    ? `VERIFICACIÓN DE DEPRECATORIO: ${ed.estado}. Actuación SATJE ${ed.codigoActuacion}; fecha ${ed.fechaActuacion}; referencia ${ed.documentoReferencia}. Documentos leídos: ${ed.documentosConsultados}, fallidos: ${ed.documentosFallidos}. La discrepancia documental no implica automáticamente nulidad ni determina el efecto jurídico de la actuación.`
+    ? `Verificación del deprecatorio: ${({ COINCIDENCIA_DOCUMENTAL: "el documento coincide con esta causa", DISCREPANCIA_DOCUMENTAL: "el documento menciona otras partes (revisar)", DOCUMENTO_INACCESIBLE: "no se pudo leer el documento", EVIDENCIA_INSUFICIENTE: "no hay datos suficientes para comprobarlo" } as Record<string, string>)[ed.estado] || "sin verificar"} (actuación ${ed.codigoActuacion}, ${fechaLegible(ed.fechaActuacion, false)}). Esto no determina por sí solo la validez del deprecatorio.`
     : "";
   const respuesta = notaDocumento ? `${notaDocumento}\n\n${respuestaModelo}` : respuestaModelo;
   const alerta = resultado.alertaAbandonoObjeto;
@@ -144,7 +145,9 @@ Analiza las actuaciones y responde con precisión:
   // El cálculo especializado es la fuente de referencia; nunca permitir que
   // una narración del LLM desactive una alerta preventiva vencida.
   const afirmacionIncompatible = /(?:no (?:existe|hay|presenta|se considera|se evidencia) (?:un |ning[uú]n )?riesgo de abandono|sin riesgo de abandono|no hay riesgo de abandono|riesgo de abandono (?:es |se considera )?(?:inexistente|descartado)|la alerta (?:no aplica|queda descartada))/i.test(respuesta);
-  const nota = `ALERTA PREVENTIVA VENCIDA: ${Math.abs(alerta.diasRestantes)} días sobre el límite referencial (${alerta.fechaReferencialAbandono}). No consta por este indicador declaratoria judicial de abandono. Las diligencias u oficios existentes no descartan automáticamente el riesgo; corresponde revisar su efecto procesal.`;
+  const nota = juezNegoAbandono(alerta)
+    ? `Alerta preventiva: ${Math.abs(alerta.diasRestantes)} días sobre el plazo referencial (${fechaLegible(alerta.fechaReferencialAbandono, false)}), pero el juez ya declaró improcedente un pedido de abandono en esta causa. Conviene igual dejar constancia con un escrito de impulso.`
+    : `Alerta preventiva vencida: ${Math.abs(alerta.diasRestantes)} días sobre el plazo referencial (${fechaLegible(alerta.fechaReferencialAbandono, false)}). No es una declaratoria judicial de abandono, pero las diligencias u oficios existentes no descartan el riesgo por sí solos.`;
   if (afirmacionIncompatible) {
     return `⚠️ ${nota}\n\nEl texto automático presentaba una conclusión contradictoria sobre el riesgo de abandono y se omitió por seguridad. Revise las actuaciones y la alerta especializada antes de decidir acciones legales.`;
   }

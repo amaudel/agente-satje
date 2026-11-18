@@ -110,7 +110,7 @@ test("dos relojes: usa fecha y plazo determinantes del análisis especializado",
     const r = await procesarCausaIndividual("01333-2023-10725", "https://backend.test", "k");
     assert.equal(r.alertaAbandonoObjeto.fechaUltimaActuacion, "2023-11-30");
     assert.equal(r.alertaAbandonoObjeto.diasRestantes, -863);
-    assert.match(r.alertaAbandonoObjeto.relojDeprecatorioInfo || "", /2025-07-21/);
+    assert.match(r.alertaAbandonoObjeto.relojDeprecatorioInfo || "", /21 jul 2025/);
   } finally { globalThis.fetch = original; }
 });
 
