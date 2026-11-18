@@ -1296,7 +1296,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
                   </div>
                   <div>
                     <div class="fecha-item-title">3. Inscripción Real Registral</div>
-                    <div class="fecha-item-val" style="color:${cautelar.fechaInscripcion ? 'var(--danger)' : 'var(--text-muted)'};">${escapeHtml(cautelar.fechaInscripcion || 'No confirmada')}</div>
+                    <div class="fecha-item-val" style="color:${cautelar.fechaInscripcion || cautelar.estadoCicloVida === 'INSCRIPCION_CONFIRMADA' ? 'var(--danger)' : 'var(--text-muted)'};">${escapeHtml(cautelar.fechaInscripcion || (cautelar.estadoCicloVida === 'INSCRIPCION_CONFIRMADA' ? 'Inscrita (fecha no digitalizada)' : 'No confirmada'))}</div>
                   </div>
                   <div>
                     <div class="fecha-item-title">4. Registro en SATJE</div>
@@ -1487,7 +1487,7 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
                     <td style="font-size:0.85rem;">${escapeHtml(item.etapaProcesalEspecifica)}</td>
                     <td>${item.poseeSentencia ? '🟢 SÍ' : '🔴 NO'}</td>
                     <td><span class="kpi-tag ${estadoBadgeClass[item.estadoCicloVidaMedida] || 'muted'}">${estadoTextos[item.estadoCicloVidaMedida] || '⚪ Sin Medida'}</span></td>
-                    <td style="font-weight:700; color:var(--accent);">${escapeHtml(item.fechaInscripcionMedida || 'No confirmada')}</td>
+                    <td style="font-weight:700; color:var(--accent);">${escapeHtml(item.fechaInscripcionMedida || (item.estadoCicloVidaMedida === 'INSCRIPCION_CONFIRMADA' ? 'Inscrita (fecha no digitalizada)' : 'No confirmada'))}</td>
                     <td><span class="kpi-tag ${item.alertaAbandonoObjeto.badgeClass}">${escapeHtml(item.alertaAbandono)}</span></td>
                     <td><a href="/?causa=${escapeHtml(item.causa)}" class="btn-detalle chip-link">Ver detalle <span aria-hidden="true">→</span></a></td>
                   </tr>

@@ -182,3 +182,24 @@ test("si el juez ya nego un abandono, la alerta lo menciona", async () => {
     assert.match(r.alertaAbandonoObjeto.explicacion, /improcedente un pedido de abandono el 2025-02-25/);
   } finally { globalThis.fetch = original; }
 });
+
+test("la tarjeta toma 'inscrita' de la API cuando el Registro adjunto la razon", async () => {
+  const { aplicarConfirmacionMedidaApi, esPosibleRespuestaRegistro } = await import("./procesar-causa.js");
+  const local = {
+    estadoCicloVida: "INSCRIPCION_NO_CONFIRMADA",
+    observacion: "Posible respuesta del Registro presentada el 2023-11-30. Leer el documento...",
+    fechaOrdenJudicial: "2023-11-06", fechaOficio: "2023-11-16", fechaInscripcion: null, confianza: "BAJA",
+  };
+  assert.equal(esPosibleRespuestaRegistro(local), true);
+  const api = { data: [{ estado: "INSCRIPCION_CONFIRMADA", confianza: "MEDIA", fechaInscripcion: null,
+    evidencia: { origen: "documento_hba", fechaActuacionSatje: "2023-11-30T16:51:06Z", nombreArchivo: "FE PRESENTACION_59820127" } }] };
+  const r = aplicarConfirmacionMedidaApi(local, api);
+  assert.equal(r.estadoCicloVida, "INSCRIPCION_CONFIRMADA");
+  assert.equal(r.confianza, "MEDIA");
+  assert.equal(r.fechaOficio, "2023-11-16");
+  assert.match(r.evidenciaTextual, /2023-11-30/);
+  // Si la API no tiene un documento que lo pruebe, no se cambia nada.
+  const sinDoc = { data: [{ estado: "INSCRIPCION_CONFIRMADA", evidencia: { origen: "actuacion" } }] };
+  assert.equal(aplicarConfirmacionMedidaApi(local, sinDoc), local);
+  assert.equal(aplicarConfirmacionMedidaApi(local, { data: [] }), local);
+});

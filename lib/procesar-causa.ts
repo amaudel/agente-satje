@@ -14,6 +14,37 @@ import { verificarDocumentosDeprecatorio } from "./deprecatorios-documentos.js";
 // la funcion serverless (60s) para poder devolver una respuesta en vez de que
 // Vercel mate el proceso a mitad de camino y el usuario vea un error de red.
 const PRESUPUESTO_POR_CAUSA_MS = 45000;
+const TIMEOUT_MEDIDAS_API_MS = 12000;
+
+export function esPosibleRespuestaRegistro(m: any): boolean {
+  return m?.estadoCicloVida === "INSCRIPCION_NO_CONFIRMADA" && String(m?.observacion || "").startsWith("Posible respuesta del Registro");
+}
+
+/** Usa la medida de la API solo si confirma la inscripcion con un documento real. */
+export function aplicarConfirmacionMedidaApi(local: any, api: any): any {
+  const medidas: any[] = Array.isArray(api?.data) ? api.data : [];
+  const confirmada = medidas.find((m) => m?.estado === "INSCRIPCION_CONFIRMADA" && m?.evidencia?.origen === "documento_hba");
+  if (!confirmada) return local;
+  const ev = confirmada.evidencia || {};
+  const diaEvidencia = String(ev.fechaActuacionSatje || "").slice(0, 10);
+  return {
+    ...local,
+    estadoCicloVida: "INSCRIPCION_CONFIRMADA",
+    fechaOrdenJudicial: local.fechaOrdenJudicial || confirmada.fechaOrdenJudicial || null,
+    fechaOficio: local.fechaOficio || confirmada.fechaOficio || null,
+    fechaInscripcion: confirmada.fechaInscripcion || null,
+    numeroInscripcion: confirmada.numeroInscripcion || local.numeroInscripcion || null,
+    numeroRepertorio: confirmada.numeroRepertorio || local.numeroRepertorio || null,
+    confianza: confirmada.confianza === "ALTA" ? "ALTA" : "MEDIA",
+    evidenciaTextual: `El Registro presentó la razón de inscripción${diaEvidencia ? ` el ${diaEvidencia}` : ""} (documento leído: ${ev.nombreArchivo || "adjunto SATJE"}).`,
+    observacion: confirmada.fechaInscripcion
+      ? `Inscripción confirmada por documento del Registro (fecha de inscripción ${confirmada.fechaInscripcion}).`
+      : "Inscripción confirmada: el Registro adjuntó la razón de inscripción. El número y la fecha exacta están en la razón, que no está digitalizada en SATJE.",
+    recomendacionEstrategica: confirmada.fechaInscripcion || confirmada.numeroInscripcion
+      ? "La medida está inscrita. Si se requiere para ejecución o remate, pedir el certificado de gravámenes actualizado."
+      : "La medida está inscrita. Si se necesita el número o la fecha exacta, pedir copia de la razón en el juzgado o el certificado de gravámenes en el Registro.",
+  };
+}
 const TIMEOUT_AGENT_MS = 30000;
 // El backend consulta SATJE en vivo (via conector Apify) y puede tardar
 // bastante mas que el endpoint agent/satje, que responde de cache.
@@ -194,7 +225,18 @@ export async function procesarCausaIndividual(
 
   const clasificacionEtapa = clasificarEtapaProcesal(actuaciones);
   const analisisSentencia = detectorSentenciaLegal(actuaciones);
-  const cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
+  let cicloVidaMedida = detectorCicloVidaMedidaCautelar(actuaciones);
+  // La tarjeta no abre PDFs: si quedo en "posible respuesta del Registro", se le
+  // pregunta a la API (que si lee el documento). Si no responde a tiempo, queda igual.
+  if (esPosibleRespuestaRegistro(cicloVidaMedida) && causaSinGuiones && restante() > MIN_TIMEOUT_MS) {
+    try {
+      const res = await fetch(`${baseUrl}/api/v1/causas/${encodeURIComponent(causaSinGuiones)}/medidas-cautelares`, {
+        headers,
+        signal: signalPara(TIMEOUT_MEDIDAS_API_MS),
+      });
+      if (res.ok) cicloVidaMedida = aplicarConfirmacionMedidaApi(cicloVidaMedida, await res.json());
+    } catch { /* se queda con el analisis local */ }
+  }
   const alertaLocal = calcularAlertaAbandonoProcesal(actuaciones, analisisSentencia.poseeSentencia);
   const riesgo = await riesgoEspecializadoPromise;
   let alertaAbandono = alertaLocal;
