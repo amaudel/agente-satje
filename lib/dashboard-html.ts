@@ -201,6 +201,21 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
       var promptTexto = input.value.trim();
       input.value = '';
 
+      // Si la pagina ahora muestra otro juicio (consulta sin recargar o boton Atras),
+      // la conversacion anterior era de otro expediente: se empieza de cero con el nuevo.
+      var causaEnPantalla = new URLSearchParams(window.location.search).get('causa') || ${jsString(causa)};
+      if (window.chatCausaPagina === undefined) window.chatCausaPagina = causaEnPantalla;
+      if (causaEnPantalla && causaEnPantalla !== window.chatCausaPagina) {
+        window.chatCausaPagina = causaEnPantalla;
+        window.chatCausaActiva = causaEnPantalla;
+        window.chatHistorial = [];
+        var aviso = document.createElement('div');
+        aviso.className = 'chat-msg ai';
+        aviso.setAttribute('data-aviso-cambio', '1');
+        aviso.innerText = '📂 Ahora trabajamos con el juicio ' + causaEnPantalla + '. La conversación anterior era de otro juicio y ya no se usa.';
+        msgs.appendChild(aviso);
+      }
+
       var userBubble = document.createElement('div');
       userBubble.className = 'chat-msg user';
       userBubble.innerText = promptTexto;

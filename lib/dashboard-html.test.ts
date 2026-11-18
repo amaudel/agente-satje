@@ -133,3 +133,10 @@ test("la tarjeta tecnica de Upstash / RAG no se muestra al usuario", () => {
   assert.ok(!html.includes("RAG VECTORIAL CONECTADO"));
   assert.ok(!html.includes("Precedentes / Causas Semánticamente Similares"));
 });
+
+test("chat: al cambiar de juicio en pantalla se reinicia la causa y el historial", async () => {
+  const { generarDashboardHTML } = await import("./dashboard-html.js");
+  const html = generarDashboardHTML({ causa: "01333-2023-10725" });
+  assert.match(html, /causaEnPantalla !== window\.chatCausaPagina/);
+  assert.match(html, /window\.chatHistorial = \[\];/);
+});
