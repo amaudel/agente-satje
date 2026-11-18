@@ -31,7 +31,8 @@ import {
 } from "../lib/valor-demanda.js";
 import { consultarLimite, registrarFallo, limpiarLimite, ipDelCliente } from "../lib/rate-limit.js";
 import { mapConcurrente } from "../lib/concurrencia.js";
-import { CHAT_TOOLS, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
+import { CHAT_TOOLS, CHAT_TOOLS_MEMORIA, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
+import { configMemoria, leerNotaCausa } from "../lib/memoria.js";
 import {
   REGLA_DATOS_NO_INSTRUCCIONES,
   ejecutarBucleChat,
@@ -247,6 +248,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       // Contexto del expediente: se re-consulta fresco contra SATJE en cada
       // mensaje (en vez de confiar en el resumen chico que arma el navegador),
       // para que el chat vea las actuaciones reales, no solo 5 campos sueltos.
+      const memoriaCfg = configMemoria();
+      // La nota guardada de la causa se pide en paralelo con SATJE (no suma espera).
+      const notaMemoriaPromesa = causaSolicitada ? leerNotaCausa(memoriaCfg, causaSolicitada) : Promise.resolve("");
       let contextoExpediente: any = { causa: causaSolicitada || "Sin causa seleccionada" };
       if (causaSolicitada) {
         try {
@@ -274,9 +278,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
+      const notaMemoria = await notaMemoriaPromesa;
+      if (notaMemoria) contextoExpediente.memoriaPrevia = notaMemoria;
+
       try {
         const openai = new OpenAI({ apiKey: openaiKey });
-        const toolCtx: ChatToolContext = { baseUrl: chatBaseUrl, apiKey: chatApiKey, causaActual: causaSolicitada };
+        const toolCtx: ChatToolContext = { baseUrl: chatBaseUrl, apiKey: chatApiKey, causaActual: causaSolicitada, memoria: memoriaCfg };
 
         const messages: any[] = [
           {
@@ -288,7 +295,8 @@ Si el contexto o el resultado de una herramienta trae un campo "error", dilo cla
 Tienes herramientas para consultar resoluciones, leer el texto de los documentos adjuntos a una actuación, o consultar otra causa distinta — úsalas cuando la pregunta lo requiera en vez de decir que no tienes esa información.
 Si te preguntan por datos de las partes (demandado, actor, cuantía/valor de la demanda, tipo de procedimiento, asunto), usa leer_documento_actuacion sobre la actuación tipo "CARATULA DE JUICIO" (normalmente la primera actuación del proceso, revisa el listado de actuaciones del contexto para encontrar su codigoActuacion) — ahí está la ficha estructurada del caso. Si esa carátula no trae la cuantía u otro dato puntual, dilo claramente en vez de inventarlo; ese dato puede no estar digitalizado en SATJE para ese proceso.
 Si te preguntan por la fecha exacta de inscripción/registro de una medida cautelar (o cualquier dato puntual del oficio/certificado registral que no venga ya resuelto en medidaCautelar.fechaInscripcion), usa leer_documento_actuacion con el codigoActuacion de medidaCautelar.fuente.codigoActuacion (si existe en el contexto) para leer el oficio o certificado real en vez de solo el resumen. Esa actuación puede traer varios documentos (el oficio y su certificado adjunto); revisa todos los que te devuelva la herramienta antes de responder.
-${REGLA_DATOS_NO_INSTRUCCIONES}
+${memoriaCfg ? `MEMORIA: si el expediente trae "memoriaPrevia", son notas guardadas en consultas anteriores (hechos ya verificados, errores ya detectados). Usalas y mencionalas cuando sirvan ("En una revision anterior se confirmo que..."), pero si contradicen los datos actuales de SATJE, prevalece SATJE y senala la diferencia. Con guardar_en_memoria guarda solo hechos confirmados importantes con su fuente, y dile al usuario "📝 Guardé en memoria: ...". Con buscar_en_memoria consulta lo guardado sobre otros juicios o abogados.
+` : ""}${REGLA_DATOS_NO_INSTRUCCIONES}
 El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y </expediente>. Despues vienen los mensajes anteriores de esta conversacion: usalos para entender a que se refiere el usuario (por ejemplo "ese proceso", "la demanda", "el juez").`,
           },
           mensajeDatosExpediente(contextoExpediente),
@@ -310,7 +318,7 @@ El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y 
             const completion = await openai.chat.completions.create({
               model: "gpt-4o-mini",
               messages: msgs,
-              ...(conHerramientas ? { tools: CHAT_TOOLS } : {}),
+              ...(conHerramientas ? { tools: memoriaCfg ? [...CHAT_TOOLS, ...CHAT_TOOLS_MEMORIA] : CHAT_TOOLS } : {}),
               temperature: 0.3,
               max_tokens: 1000,
             });

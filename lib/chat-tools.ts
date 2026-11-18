@@ -1,4 +1,5 @@
 import { procesarCausaIndividual } from "./procesar-causa.js";
+import { buscarEnMemoria, guardarNotaCausa, leerNotaCausa, type ConfigMemoria } from "./memoria.js";
 
 // Timeouts de red contra el backend SATJE: sin esto una lentitud del VPS
 // cuelga la funcion serverless hasta el limite de Vercel.
@@ -68,10 +69,44 @@ export const CHAT_TOOLS = [
   },
 ];
 
+// Herramientas de memoria: solo se ofrecen si la memoria esta configurada.
+export const CHAT_TOOLS_MEMORIA = [
+  {
+    type: "function" as const,
+    function: {
+      name: "guardar_en_memoria",
+      description:
+        "Guarda en la memoria permanente un hecho CONFIRMADO o una conclusion importante sobre una causa, para recordarla en futuras consultas (ej. 'La jueza nego el abandono el 2025-02-25 (actuacion 225792943)'). Usar cuando el usuario lo pida, o cuando se verifico algo relevante leyendo un documento o detectando un error. Incluir la fuente (fecha o codigo de actuacion). No guardar suposiciones, conversaciones enteras, cedulas ni datos de contacto. Avisar al usuario lo que se guardo.",
+      parameters: {
+        type: "object",
+        properties: {
+          numeroCausa: { type: "string", description: "Numero de causa. Si se omite, se usa la causa en pantalla." },
+          nota: { type: "string", description: "Hecho a recordar, en una o dos frases, con su fuente." },
+        },
+        required: ["nota"],
+      },
+    },
+  },
+  {
+    type: "function" as const,
+    function: {
+      name: "buscar_en_memoria",
+      description:
+        "Busca en la memoria permanente notas guardadas antes sobre juicios o abogados (por palabra, nombre o numero). Usar cuando el usuario pregunte que se sabe o que se reviso antes sobre algo.",
+      parameters: {
+        type: "object",
+        properties: { texto: { type: "string", description: "Palabras a buscar." } },
+        required: ["texto"],
+      },
+    },
+  },
+];
+
 export interface ChatToolContext {
   baseUrl: string;
   apiKey: string;
   causaActual: string;
+  memoria?: ConfigMemoria | null;
 }
 
 function headersConApiKey(apiKey: string): Record<string, string> {
@@ -143,8 +178,10 @@ export async function ejecutarHerramientaChat(name: string, args: any, ctx: Chat
       if (resultado.backendError) {
         return { error: `No se pudo consultar SATJE para esa causa (${resultado.backendError}).` };
       }
+      const memoriaPrevia = await leerNotaCausa(ctx.memoria || null, args.numeroCausa);
       return {
         causa: resultado.causa,
+        ...(memoriaPrevia ? { memoriaPrevia } : {}),
         etapaProcesalGeneral: resultado.etapaProcesalGeneral,
         etapaProcesalEspecifica: resultado.etapaProcesalEspecifica,
         poseeSentencia: resultado.poseeSentencia,
@@ -153,6 +190,17 @@ export async function ejecutarHerramientaChat(name: string, args: any, ctx: Chat
         totalActuaciones: resultado.totalActuaciones,
         actuaciones: resultado.actuaciones.slice(0, 20),
       };
+    }
+
+    if (name === "guardar_en_memoria") {
+      const causa = args?.numeroCausa || causaActual;
+      if (!causa) return { error: "No hay causa seleccionada para guardar la nota." };
+      const r = await guardarNotaCausa(ctx.memoria || null, causa, args?.nota);
+      return r.ok ? { guardado: true, detalle: r.mensaje } : { error: r.mensaje };
+    }
+
+    if (name === "buscar_en_memoria") {
+      return await buscarEnMemoria(ctx.memoria || null, args?.texto);
     }
 
     return { error: "Herramienta desconocida: " + name };
