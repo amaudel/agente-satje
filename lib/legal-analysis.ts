@@ -568,7 +568,49 @@ export function detectorCicloVidaMedidaCautelar(actuaciones: any[]): AnalisisCic
     }
   }
 
+  // El Registro suele contestar subiendo un escrito en linea ("OFICIO - ANEXOS,
+  // Escrito, FePresentacion") cuyos datos no dicen "inscripcion": solo el PDF lo
+  // dice (caso 01333-2023-10725, razon de inscripcion de Machala). Si la medida
+  // quedo "OFICIADA", se apunta a ese escrito para que el chat lo lea.
+  if (me.estadoCicloVida === "OFICIADA" && me.fechaOficio) {
+    const respuesta = respuestaProbableDelRegistro(actuacionesOrdenadas, me.fechaOficio);
+    if (respuesta) {
+      const dia = diaDeActuacion(respuesta);
+      me.estadoCicloVida = "INSCRIPCION_NO_CONFIRMADA";
+      me.fechaActuacionSatje = dia || null;
+      me.confianza = "BAJA";
+      me.evidenciaTextual = `Escrito presentado el ${dia} después del oficio (${String(respuesta.actividad || respuesta.tipo || "").slice(0, 120)}).`;
+      me.observacion = `Posible respuesta del Registro presentada el ${dia}. Leer el documento de esa actuación para confirmar si adjunta la razón de inscripción.`;
+      me.recomendacionEstrategica = "Abrir el documento de la actuación indicada: si el Registro adjuntó la razón de inscripción, la medida está inscrita.";
+      me.fuente = {
+        tipoActuacion: String(respuesta.tipo || "ESCRITO"),
+        codigoActuacion: respuesta.codigo ?? respuesta.codigoActuacion,
+        archivo: respuesta.nombreArchivo || undefined,
+        uuid: respuesta.uuid || undefined,
+        alias: respuesta.alias || "HBA01",
+      };
+    }
+  }
+
   return me;
+}
+
+const DIAS_VENTANA_RESPUESTA_REGISTRO = 365;
+
+/** Primer escrito presentado (FePresentacion) despues del oficio, o una providencia que incorpora el oficio del Registro. */
+export function respuestaProbableDelRegistro(ordenadas: any[], fechaOficio: string): any | null {
+  const desde = new Date(fechaOficio).getTime();
+  for (const a of ordenadas) {
+    const dia = diaDeActuacion(a);
+    if (!dia || dia <= fechaOficio) continue;
+    if ((new Date(dia).getTime() - desde) / 86400000 > DIAS_VENTANA_RESPUESTA_REGISTRO) break;
+    const tipo = String(a?.tipo || "").toUpperCase();
+    const texto = String(a?.actividad || a?.nombreActuacion || "").toLowerCase();
+    const escritoPresentado = (tipo.includes("OFICIO") || tipo.includes("ESCRITO")) && (texto.includes("fepresentacion") || texto.includes("anexos"));
+    const incorporaOficioRegistro = /(incorp[oó]rese|agr[eé]guese).{0,80}oficio.{0,60}registro/.test(texto);
+    if (escritoPresentado || incorporaOficioRegistro) return a;
+  }
+  return null;
 }
 
 // Tipos de actuacion que SATJE registra con fecha propia pero que no

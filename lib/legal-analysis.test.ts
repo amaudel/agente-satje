@@ -660,3 +660,26 @@ describe("fecha de inscripción exige evidencia registral, no fecha de escritos"
     assert.equal(r.fechaInscripcion, null);
   });
 });
+
+describe("respuesta del Registro en un escrito presentado (caso 01333-2023-10725)", () => {
+  const base = [
+    { codigo: 207369413, fecha: "2023-11-14T20:53:34Z", tipo: "DILIGENCIA DEPRECATORIO (AUTO DE SUSTANCIACION)", actividad: "se ordena la prohibicion de enajenar los derechos y acciones respecto del bien inmueble" },
+    { codigo: 207460047, fecha: "2023-11-16T16:25:42Z", tipo: "OFICIO A ENTIDADES PUBLICAS (OFICIO)", actividad: "se ordena la prohibicion de enajenar del bien inmueble; Registradora de la Propiedad del Canton Machala" },
+  ];
+
+  test("apunta al escrito que subio el Registro para leerlo", () => {
+    const r = detectorCicloVidaMedidaCautelar([
+      ...base,
+      { codigo: 59820127, fecha: "2023-11-30T16:51:06Z", tipo: "OFICIO", actividad: "ANEXOS, Escrito, FePresentacion", nombreArchivo: "FE PRESENTACION_59820127" },
+    ]);
+    assert.equal(r.estadoCicloVida, "INSCRIPCION_NO_CONFIRMADA");
+    assert.equal(r.fuente.codigoActuacion, 59820127);
+    assert.match(r.observacion, /Posible respuesta del Registro presentada el 2023-11-30/);
+    assert.equal(r.fechaInscripcion, null);
+  });
+
+  test("sin escrito posterior sigue OFICIADA", () => {
+    const r = detectorCicloVidaMedidaCautelar(base);
+    assert.equal(r.estadoCicloVida, "OFICIADA");
+  });
+});
