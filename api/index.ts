@@ -107,12 +107,8 @@ async function generarResumenIA(
 ): Promise<string> {
   const openai = new OpenAI({ apiKey: openaiKey });
   const promptSistema = `Eres un agente experto en análisis jurídico procesal en Ecuador (SATJE).
-Analiza las actuaciones y responde con precisión:
-1. Revisa e indica la ETAPA PROCESAL GENERAL Y ESPECÍFICA según la taxonomía judicial de Ecuador.
-2. Revisa e indica si existe SENTENCIA emitida en el expediente.
-3. Analiza la Medida Cautelar y desglosa: Fecha de Orden Judicial, Fecha de Oficio, Fecha de Inscripción Real Registral y Estado (INSCRIPCION_CONFIRMADA, ORDENADA, LEVANTADA).
-4. Evalúa el riesgo de Abandono Procesal según el Art. 245-247 del COGEP.
-5. Entrega un Resumen Ejecutivo (2-3 oraciones). Usa lenguaje condicional para próximos pasos y exige comprobar actuaciones y documentos antes de proponer escritos.\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. FORMATO: escribe para una abogada, en español claro; nunca muestres códigos internos (como INSCRIPCION_CONFIRMADA, OFICIADA, null, N/A, proceso_principal); escribe las fechas como "30 nov 2023"; si un dato no existe di "no consta". Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.\n${REGLA_DATOS_NO_INSTRUCCIONES}`;
+La pantalla ya muestra en tarjetas la etapa, la sentencia, la medida cautelar con sus fechas y el riesgo de abandono: NO repitas esos datos en lista.
+Escribe un ANÁLISIS breve (entre 3 y 5 oraciones, un solo párrafo, sin títulos ni numeración) que diga: qué está frenando o moviendo el proceso, qué significa para la parte actora, y qué convendría revisar o hacer a continuación (en lenguaje condicional, pidiendo comprobar actuaciones y documentos antes de proponer escritos).\nREGLAS DE EVIDENCIA: una medida ordenada u oficiada NO equivale a una inscripción; solo indicar inscripción confirmada con evidencia registral específica. Una alerta de seis meses NO es declaratoria judicial de abandono. Si los datos son parciales o hay deprecatorios, señalar incertidumbre. No afirmar que hay sentencia, ejecutoria ni abandono sin la correspondiente actuación judicial. Nunca recomendar automáticamente presentar un escrito específico sin verificar su pertinencia. REGLA PRIORITARIA: si el indicador especializado está VENCIDO o es negativo, DEBES reconocer expresamente que existe una ALERTA PREVENTIVA VENCIDA, aunque haya diligencias u oficios. Las diligencias no eliminan por sí solas ese riesgo. No escribas que no hay riesgo de abandono ni que el proceso sigue activo jurídicamente por existir diligencias; eso exige evaluar naturaleza, fechas y efecto procesal de cada actuación. La alerta preventiva vencida NO significa que el juez haya declarado abandono. Nunca contradigas el indicador especializado, y si falta evidencia indícalo. FORMATO: escribe para una abogada, en español claro; nunca muestres códigos internos (como INSCRIPCION_CONFIRMADA, OFICIADA, null, N/A, proceso_principal); escribe las fechas como "30 nov 2023"; si un dato no existe di "no consta". Cuando exista verificación documental del deprecatorio, incorpora expresamente su estado, código de actuación, fecha, referencia documental y limitaciones al Resumen Ejecutivo; nunca declares nulidad automáticamente.\n${REGLA_DATOS_NO_INSTRUCCIONES}`;
 
   const ed = resultado.evidenciaDeprecatorio;
   const evidenciaResumen = ed
@@ -130,7 +126,7 @@ Analiza las actuaciones y responde con precisión:
       },
     ],
     temperature: 0.2,
-    max_tokens: 900,
+    max_tokens: 400,
   });
 
   const respuestaModelo = completion.choices[0]?.message?.content || "Sin respuesta del modelo.";
@@ -892,7 +888,9 @@ El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y 
     // MODO INDIVIDUAL (PESTAÑA 1)
     const causaInput = listaCausas[0];
     const tFaseSatje = Date.now();
+    const notasMemoriaPromesa = leerNotaCausa(configMemoria(), causaInput);
     const resultadoIndividual = await procesarCausaIndividual(causaInput, baseUrl, apiKey);
+    const notasMemoria = await notasMemoriaPromesa;
     const msSatje = Date.now() - tFaseSatje;
     const actuaciones = resultadoIndividual.actuaciones;
     const agrupacionMedidas = agruparMedidasCautelares(actuaciones);
@@ -1073,7 +1071,8 @@ El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y 
         riesgo_abandono_count: indicadoresEncontrados.riesgo_abandono.length,
       },
       detalles_indicadores: indicadoresEncontrados,
-      actuaciones_recientes: actuaciones.slice(0, 6),
+      actuaciones_recientes: actuaciones.slice(0, 300),
+      memoria_nota: notasMemoria,
     };
 
     if (wantsJson) {

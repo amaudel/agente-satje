@@ -1,5 +1,6 @@
 import type { ClasificacionEtapa, AnalisisCicloVidaMedida } from "./legal-analysis.js";
 import { construirResumenRapido, fechaLegible, juezNegoAbandono, type Tono } from "./resumen-rapido.js";
+import { esHito, fechaDe, juzgadoCorto, notasDeMemoria, ordenarRecientesPrimero } from "./cronologia.js";
 
 // A2: escape de valores de usuario antes de interpolar en el HTML del dashboard.
 // `causa` llega via query string (/?causa=...) y normalizarNumeroCausa devuelve
@@ -33,7 +34,10 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const mostrarValorDemanda = Boolean(causa) && Number(datos?.total_actuaciones) > 0;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
   const resolucionesCount = datos?.resumen_indicadores?.resoluciones_count || 0;
-  const actuaciones = datos?.actuaciones_recientes || [];
+  const actuaciones = ordenarRecientesPrimero(datos?.actuaciones_recientes || []);
+  const notasMemoria = notasDeMemoria(datos?.memoria_nota);
+  const juzgadosCrono = Array.from(new Set(actuaciones.map((a: any) => juzgadoCorto(a?.nombreJudicatura)))) as string[];
+  const VISIBLES_CRONO = 15;
   const vectorDbStatus = datos?.vector_db_status || { activo: false, precedentes: [] };
   // La indexacion en Upstash sigue ocurriendo por detras (la usa el chat); la
   // tarjeta es informacion tecnica y solo se muestra si se pide expresamente.
@@ -146,6 +150,34 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           if (input) input.focus();
         }
       }
+    };
+
+    window.prepararChat = function(texto) {
+      var panel = document.getElementById('chatWidget');
+      if (panel && window.getComputedStyle(panel).display !== 'flex') window.toggleChat();
+      var input = document.getElementById('chatInputText');
+      if (input) { input.value = texto; input.focus(); }
+    };
+
+    window.filtrarCrono = function(boton) {
+      var filtro = boton.getAttribute('data-filtro') || 'todas';
+      document.querySelectorAll('.crono-chip').forEach(function(b) { b.setAttribute('aria-pressed', b === boton ? 'true' : 'false'); });
+      var mas = document.getElementById('cronoMas');
+      document.querySelectorAll('#cronoLista .crono-item').forEach(function(li) {
+        var ok = filtro === 'todas' ? true
+          : filtro === 'hitos' ? li.getAttribute('data-hito') === '1'
+          : ('j:' + li.getAttribute('data-juzgado')) === filtro;
+        var extraOculto = filtro === 'todas' && li.getAttribute('data-extra') === '1' && !window.__cronoCompleta;
+        li.hidden = !ok || extraOculto;
+      });
+      if (mas) mas.parentElement.hidden = filtro !== 'todas' || !!window.__cronoCompleta;
+    };
+
+    window.verTodaCrono = function() {
+      window.__cronoCompleta = true;
+      document.querySelectorAll('#cronoLista .crono-item[data-extra="1"]').forEach(function(li) { li.hidden = false; });
+      var mas = document.getElementById('cronoMas');
+      if (mas) mas.parentElement.hidden = true;
     };
 
     window.usarPromptChip = function(texto) {
@@ -269,16 +301,14 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             return;
           }
           if (!res.encontrado) {
-            box.innerHTML = '<strong>No se encontró el valor de la demanda.</strong> <span style="color:var(--text-muted);">' + esc(res.motivo || '') + '</span>';
+            box.innerHTML = 'No se encontró en los documentos del inicio <span style="color:var(--text-muted);">(' + esc(res.motivo || 'puede ser un PDF escaneado') + ')</span>';
             return;
           }
           var fuente = res.fuente || {};
           box.innerHTML =
-            '<div style="font-size:1.9rem; font-weight:800; color:#fff;">' + formatoDinero(res.valor, res.moneda) + '</div>' +
-            (res.concepto ? '<div style="font-size:0.85rem; color:var(--text-muted);">Concepto: ' + esc(res.concepto) + '</div>' : '') +
-            (res.evidencia ? '<div style="margin-top:0.5rem; padding:0.5rem 0.8rem; border-left:3px solid #22c55e; font-style:italic; color:#e2e8f0;">“' + esc(res.evidencia) + '”</div>' : '') +
-            '<div style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-muted);">Fuente: ' + esc(fuente.tipo || 'documento del expediente') + (fuente.fecha ? ' (' + esc(fuente.fecha) + ')' : '') + (fuente.nombreArchivo ? ' · ' + esc(fuente.nombreArchivo) : '') + '</div>' +
-            '<div style="margin-top:0.3rem; font-size:0.78rem; color:var(--warning);">Valor leído por IA del documento: verifica con la demanda original.</div>';
+            '<strong style="color:#fff; font-size:1.05rem;">' + formatoDinero(res.valor, res.moneda) + '</strong>' +
+            (res.concepto ? ' <span style="color:var(--text-muted);">· ' + esc(res.concepto) + '</span>' : '') +
+            ' <span style="color:var(--text-muted); font-size:0.82rem;" title="' + esc(res.evidencia || '') + '">· leído por IA de ' + esc(fuente.tipo || 'un documento del expediente') + (fuente.nombreArchivo ? ' (' + esc(fuente.nombreArchivo) + ')' : '') + '; verificar con la demanda</span>';
         })
         .catch(function(err) {
           box.innerHTML = '⚠️ Error de conexión: ' + esc(err.message);
@@ -1011,6 +1041,30 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     .rr-btn { min-height: 44px; padding: 0 1.1rem; border-radius: 0.7rem; font: inherit; font-weight: 700; cursor: pointer; border: 1px solid var(--border); background: transparent; color: #e2e8f0; }
     .rr-btn.primario { background: var(--accent); color: #0b1220; border-color: var(--accent); }
     @media (max-width: 640px) { .rr-fila { flex-direction: column; gap: 0.3rem; } }
+    .franja-datos { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 0.6rem 2rem; align-items: center; padding: 0.9rem 1.3rem; border-radius: 0.9rem; background: var(--card-bg); border: 1px solid var(--border); color: #cbd5e1; font-size: 0.95rem; }
+    .franja-datos strong { color: #fff; }
+    .memoria-card { grid-column: 1 / -1; }
+    .memoria-lista { list-style: none; margin: 0.4rem 0 0; padding: 0; display: flex; flex-direction: column; }
+    .memoria-lista li { padding: 0.7rem 0; border-bottom: 1px solid var(--border); color: #e2e8f0; }
+    .memoria-lista li:last-child { border-bottom: 0; }
+    .memoria-lista .fecha { display: block; font-size: 0.8rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .crono-filtros { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.4rem 0 1rem; }
+    .crono-chip { min-height: 40px; padding: 0 0.95rem; border-radius: 999px; border: 1px solid var(--border); background: transparent; color: #e2e8f0; font: inherit; font-size: 0.88rem; cursor: pointer; }
+    .crono-chip[aria-pressed="true"] { background: var(--accent); color: #0b1220; border-color: var(--accent); font-weight: 800; }
+    .crono-item { display: flex; gap: 0.9rem; padding: 0.8rem 0; border-bottom: 1px solid var(--border); }
+    .crono-fecha { flex: 0 0 8.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .crono-punto { flex: 0 0 auto; width: 10px; height: 10px; margin-top: 0.45rem; border-radius: 50%; background: #475569; }
+    .crono-item.hito .crono-punto { background: var(--accent); box-shadow: 0 0 0 4px rgba(56,189,248,0.15); }
+    .crono-cuerpo { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem; }
+    .crono-tipo { font-size: 0.78rem; font-weight: 800; color: var(--text-muted); letter-spacing: 0.03em; text-transform: uppercase; }
+    .crono-item.hito .crono-tipo { color: var(--accent); }
+    .crono-texto { color: #e2e8f0; font-size: 0.93rem; overflow-wrap: anywhere; }
+    .crono-texto summary { cursor: pointer; list-style: none; }
+    .crono-texto summary::-webkit-details-marker { display: none; }
+    .crono-texto summary .mas { color: var(--accent); font-weight: 700; white-space: nowrap; }
+    .crono-meta { font-size: 0.8rem; color: var(--text-muted); }
+    .crono-meta a { color: var(--accent); }
+    @media (max-width: 640px) { .crono-item { flex-wrap: wrap; } .crono-fecha { flex-basis: 100%; } }
     .kpi-card.medida-ordenada { border-left: 6px solid var(--warning); }
     .kpi-card.medida-levantada { border-left: 6px solid var(--success); }
     .kpi-card.medida-normal { border-left: 6px solid var(--text-muted); }
@@ -1255,34 +1309,27 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             </div>
           </div>
 
-          ${mostrarValorDemanda ? `
-          <!-- VALOR POR EL QUE SE DEMANDA (se lee aparte de los documentos del inicio) -->
-          <div class="kpi-card" style="grid-column: 1 / -1; border-left: 6px solid #22c55e;">
-            <div class="kpi-tag" style="color:#22c55e;">💲 VALOR DE LA DEMANDA</div>
-            <div id="valorDemandaBox" data-pendiente="1" style="margin-top:0.5rem; color:#cbd5e1;">⏳ Buscando el valor de la demanda en los documentos del inicio del juicio… esto tarda unos segundos.</div>
+          ${poseeSentencia ? `
+          <!-- PANEL 1: ESTADO DE SENTENCIA -->
+          <div class="kpi-card sentencia-si">
+            <div>
+              <div class="kpi-tag success">🟢 Sentencia Emitida</div>
+              <div class="kpi-main-title">Sentencia emitida en la causa</div>
+            </div>
+            <div>
+              ${fechaSentencia ? `<div class="kpi-date-badge">📅 Fecha de sentencia: ${escapeHtml(fechaLegible(fechaSentencia, false) || fechaSentencia)}</div>` : ''}
+            </div>
           </div>` : ''}
 
-          <!-- PANEL 1: ESTADO DE SENTENCIA -->
-          <div class="kpi-card ${poseeSentencia ? 'sentencia-si' : 'sentencia-no'}">
-            <div>
-              <div class="kpi-tag ${poseeSentencia ? 'success' : 'warning'}">
-                ${poseeSentencia ? '🟢 Sentencia Emitida' : '🔴 Sin Sentencia Emitida'}
-              </div>
-              <div class="kpi-main-title">
-                ${poseeSentencia ? 'Sentencia Emitida en la Causa' : 'Sin Sentencia Dictada'}
-              </div>
-            </div>
-            <div>
-              ${poseeSentencia && fechaSentencia ? `
-                <div class="kpi-date-badge">📅 Fecha Sentencia: ${escapeHtml(fechaSentencia)}</div>
-              ` : `
-                <div class="kpi-subtext">No se registra resolución final o sentencia ejecutoriada en este proceso hasta la fecha.</div>
-              `}
-            </div>
+          <!-- DATOS SECUNDARIOS EN UNA FRANJA -->
+          <div class="franja-datos" aria-label="Otros datos">
+            ${poseeSentencia ? '' : '<span><strong>Sentencia:</strong> aún no</span>'}
+            <span><strong>Resoluciones:</strong> ${resolucionesCount}</span>
+            ${mostrarValorDemanda ? `<span style="flex:1 1 320px;"><strong>Valor de la demanda:</strong> <span id="valorDemandaBox" data-pendiente="1">⏳ buscando en los documentos del inicio…</span></span>` : ''}
           </div>
 
           <!-- PANEL 2: MEDIDA CAUTELAR, STEPPER DE CICLO DE VIDA Y DETECTOR DE LAS 4 FECHAS -->
-          <div class="kpi-card ${cautelar.medidaDetectada ? (cautelar.estadoCicloVida === 'INSCRIPCION_CONFIRMADA' ? 'medida-vigente' : (cautelar.estadoCicloVida === 'LEVANTADA' ? 'medida-levantada' : 'medida-ordenada')) : 'medida-normal'}">
+          <div class="kpi-card ${cautelar.medidaDetectada ? (cautelar.estadoCicloVida === 'INSCRIPCION_CONFIRMADA' ? 'medida-vigente' : (cautelar.estadoCicloVida === 'LEVANTADA' ? 'medida-levantada' : 'medida-ordenada')) : 'medida-normal'}"${poseeSentencia ? '' : ' style="grid-column: 1 / -1;"'}>
             <div>
               <div style="display:flex; justify-content:space-between; align-items:center;">
                 <div class="kpi-tag ${estadoBadgeClass[cautelar.estadoCicloVida] || 'muted'}">
@@ -1432,8 +1479,8 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             <div class="stat-lbl">Total Actuaciones</div>
           </div>
           <div class="stat-pill">
-            <div class="stat-num danger">${medidasCount}</div>
-            <div class="stat-lbl">Grupos de medidas (provisional)</div>
+            <div class="stat-num">${medidasCount}</div>
+            <div class="stat-lbl">Medidas cautelares</div>
           </div>
           <div class="stat-pill">
             <div class="stat-num">${resolucionesCount}</div>
@@ -1441,11 +1488,23 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           </div>
         </div>
 
-        <!-- INFORME DE INTELIGENCIA ARTIFICIAL CON BOTÓN DE COPIAR -->
+        <!-- MEMORIA DEL JUICIO -->
+        <section class="card memoria-card" aria-labelledby="memTitulo">
+          <div class="card-title">
+            <span id="memTitulo">📝 Lo que ya sabemos de este juicio</span>
+            <button type="button" class="btn-copy" onclick="window.prepararChat('Guarda en memoria que ')">+ Agregar nota</button>
+          </div>
+          ${notasMemoria.length ? `
+          <ul class="memoria-lista">
+            ${notasMemoria.map((n) => `<li>${escapeHtml(n.texto)}<span class="fecha">${escapeHtml(fechaLegible(n.fecha, false))}</span></li>`).join('')}
+          </ul>` : `<p style="color:var(--text-muted); margin:0.3rem 0 0;">Todavía no hay notas guardadas. Cuando el chat confirme algo importante, o tú le pidas guardarlo, aparecerá aquí.</p>`}
+        </section>
+
+        <!-- ANÁLISIS DE IA -->
         <div class="card">
           <div class="card-title">
-            <span>🤖 Reporte Ejecutivo procesal de IA (OpenAI)</span>
-            <button class="btn-copy" onclick="copiarResumenIA()">📋 Copiar Resumen</button>
+            <span>🤖 Análisis de la IA</span>
+            <button class="btn-copy" onclick="copiarResumenIA()">📋 Copiar</button>
           </div>
           <div class="ai-box" id="resumenIaText" data-pendiente="${resumenPendiente ? '1' : '0'}">${
             resumenPendiente ? "🤖 Generando el resumen ejecutivo con IA… esto tarda unos segundos." : resumenHTML
@@ -1454,22 +1513,33 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
 
         <!-- LÍNEA DE TIEMPO PROCESAL -->
         ${actuaciones.length > 0 ? `
-        <div class="card">
-          <div class="card-title">📜 Cronología de Actuaciones e Incidentes (${actuaciones.length})</div>
-          <div class="timeline">
-            ${actuaciones.map((a: any) => `
-              <div class="timeline-item">
-                <div class="timeline-header">
-                  <span>📅 ${escapeHtml(fechaLegible(a.fecha || a.fechaProvidencia || a.fechaActuacion) || 'Sin fecha')}</span>
-                  <span class="badge">${escapeHtml(a.tipo || 'ACTUACIÓN')}</span>
-                </div>
-                <div class="timeline-title">${escapeHtml(a.actividad || a.nombreActuacion || a.titulo || a.observacion || 'Actuación judicial')}</div>
-                ${a.nombreJudicatura ? `<div style="font-size:0.85rem; color:var(--text-muted); margin-top:0.4rem;">🏛️ Judicatura: ${escapeHtml(a.nombreJudicatura)}</div>` : ''}
-                ${a.nombreArchivo ? `<div style="font-size:0.85rem; color:var(--accent); margin-top:0.4rem; font-weight:600;">📎 Documento Adjunto: ${escapeHtml(a.nombreArchivo)}</div>` : ''}
-              </div>
-            `).join('')}
+        <section class="card" aria-labelledby="cronoTitulo">
+          <div class="card-title"><span id="cronoTitulo">📜 Cronología</span><span style="font-size:0.85rem; color:var(--text-muted); font-weight:600;">${actuaciones.length} actuaciones${total > actuaciones.length ? ` de ${total}` : ''}</span></div>
+          <div class="crono-filtros" role="group" aria-label="Filtrar cronología">
+            <button type="button" class="crono-chip" aria-pressed="true" data-filtro="todas" onclick="window.filtrarCrono(this)">Todas</button>
+            ${juzgadosCrono.length > 1 ? juzgadosCrono.map((j) => `<button type="button" class="crono-chip" aria-pressed="false" data-filtro="j:${escapeHtml(j)}" onclick="window.filtrarCrono(this)">${escapeHtml(j)}</button>`).join('') : ''}
+            <button type="button" class="crono-chip" aria-pressed="false" data-filtro="hitos" onclick="window.filtrarCrono(this)">Solo hitos</button>
           </div>
-        </div>
+          <ol id="cronoLista" style="list-style:none; margin:0; padding:0;">
+            ${actuaciones.map((a: any, i: number) => {
+              const texto = String(a.actividad || a.nombreActuacion || a.titulo || a.observacion || 'Actuación judicial');
+              const largo = texto.length > 240;
+              const hito = esHito(a);
+              return `<li class="crono-item${hito ? ' hito' : ''}" data-juzgado="${escapeHtml(juzgadoCorto(a.nombreJudicatura))}" data-hito="${hito ? '1' : '0'}"${i >= VISIBLES_CRONO ? ' hidden data-extra="1"' : ''}>
+                <span class="crono-fecha">${escapeHtml(fechaLegible(fechaDe(a)) || 'Sin fecha')}</span>
+                <span class="crono-punto" aria-hidden="true"></span>
+                <div class="crono-cuerpo">
+                  <span class="crono-tipo">${hito ? '★ ' : ''}${escapeHtml(a.tipo || 'Actuación')}</span>
+                  <div class="crono-texto">${largo
+                    ? `<details><summary>${escapeHtml(texto.slice(0, 220).trim())}… <span class="mas">ver más</span></summary>${escapeHtml(texto)}</details>`
+                    : escapeHtml(texto)}</div>
+                  <span class="crono-meta">${escapeHtml(juzgadoCorto(a.nombreJudicatura))}${a.nombreArchivo ? ` · 📎 ${escapeHtml(a.nombreArchivo)}` : ''}</span>
+                </div>
+              </li>`;
+            }).join('')}
+          </ol>
+          ${actuaciones.length > VISIBLES_CRONO ? `<div style="text-align:center; margin-top:1rem;"><button type="button" id="cronoMas" class="rr-btn" onclick="window.verTodaCrono()">Ver las ${actuaciones.length - VISIBLES_CRONO} actuaciones restantes</button></div>` : ''}
+        </section>
         ` : ''}
         ` : `
         <div class="card" style="text-align: center; padding: 4rem 2rem;">

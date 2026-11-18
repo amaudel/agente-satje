@@ -271,12 +271,12 @@ export async function procesarCausaIndividual(
       };
     }
     const avisoDoc = evidenciaDoc?.estado === "DISCREPANCIA_DOCUMENTAL"
-      ? "Discrepancia confirmada en el texto del PDF de SATJE; no determina nulidad del deprecatorio."
+      ? "Se confirmó leyendo el PDF; eso solo no anula el deprecatorio."
       : evidenciaDoc?.estado === "COINCIDENCIA_DOCUMENTAL"
-      ? "Documento del oficio cotejado: coincide la parte actora y el número de causa, sin acreditar por sí solo la validez."
+      ? "Se revisó el PDF y coincide con esta causa."
       : evidenciaDoc?.estado === "DOCUMENTO_INACCESIBLE"
-      ? "PDF del deprecatorio inaccesible o extracción incompleta; no hay verificación documental concluyente."
-      : discrepancia ? "No se obtuvo evidencia suficiente para aclarar la discrepancia de partes." : "";
+      ? "No se pudo leer el PDF para comprobarlo."
+      : discrepancia ? "No hay datos suficientes para aclararlo." : "";
     const avisoJuez = (Array.isArray(riesgo?.advertencias) ? riesgo.advertencias : [])
       .map((a: any) => String(a))
       .find((a: string) => a.includes("improcedente un pedido de abandono")) || "";
@@ -294,10 +294,10 @@ export async function procesarCausaIndividual(
         fechaReferencialAbandono: String(general.fechaReferencialAbandono || "N/A"),
         esDeprecatorio: Boolean(deprecada),
         relojDeprecatorioInfo: deprecada
-          ? `Juzgado principal: última actuación ${fechaLegible(principal?.ultimaActuacion?.fecha, false) || "sin dato"}. Juzgado comisionado (deprecatorio): ${deprecada?.cerrado ? "cerrado, devuelto por cumplido" : `última actuación ${fechaLegible(deprecada?.ultimaActuacion?.fecha, false) || "sin dato"}`}. El plazo se cuenta desde ${general.ambitoMasCercano === "unidad_deprecada" ? "el juzgado comisionado" : "el juzgado principal"}.${discrepancia ? ` ⚠️ El oficio del deprecatorio menciona otra parte actora: verificar antes de sacar conclusiones. ${avisoDoc}` : ""}`
+          ? `Juzgado principal: última actuación ${fechaLegible(principal?.ultimaActuacion?.fecha, false) || "sin dato"}. Juzgado comisionado (deprecatorio): ${deprecada?.cerrado ? "cerrado, devuelto por cumplido" : `última actuación ${fechaLegible(deprecada?.ultimaActuacion?.fecha, false) || "sin dato"}`}. El plazo se cuenta desde ${general.ambitoMasCercano === "unidad_deprecada" ? "el juzgado comisionado" : "el juzgado principal"}.`
           : undefined,
-        explicacion: (discrepancia ? `⚠️ Deprecatorio con identidad procesal por verificar. Indicador preventivo: las partes del deprecatorio presentan discordancias. ${avisoDoc} El efecto procesal debe evaluarse por separado.` : "Indicador preventivo especializado, no declaratoria jurídica de abandono. Verificar expediente.")
-          + (avisoJuez ? ` ⚖️ ${avisoJuez}` : ""),
+        explicacion: (discrepancia ? `⚠️ El oficio del deprecatorio menciona otras partes: hay que verificarlo. ${avisoDoc}` : "Indicador preventivo: no es una declaración del juez. Verificar el expediente.")
+          + (avisoJuez ? ` ⚖️ ${avisoJuez.replace(/el (\d{4}-\d{2}-\d{2})/, (_m: string, f: string) => `el ${fechaLegible(f, false)}`).replace("declaro", "declaró")}` : ""),
       };
     }
   } else {

@@ -179,7 +179,7 @@ test("si el juez ya nego un abandono, la alerta lo menciona", async () => {
   }) as typeof fetch;
   try {
     const r: any = await procesarCausaIndividual("01333-2023-10725", "https://backend.test", "k");
-    assert.match(r.alertaAbandonoObjeto.explicacion, /improcedente un pedido de abandono el 2025-02-25/);
+    assert.match(r.alertaAbandonoObjeto.explicacion, /improcedente un pedido de abandono el 25 feb 2025/);
   } finally { globalThis.fetch = original; }
 });
 
