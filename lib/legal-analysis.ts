@@ -79,6 +79,7 @@ export function extraerTodasLasActuaciones(data: any): any[] {
           result.push({
             ...act,
             nombreJudicatura: inc.nombreJudicatura || data.judicatura || "",
+            incidente: act?.incidente ?? inc.incidente,
           });
         }
       }

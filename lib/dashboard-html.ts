@@ -30,6 +30,10 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const resumenPendiente = datos?.resumen_pendiente === true;
   const total = datos?.total_actuaciones || 0;
   const datosIncompletos = datos?.datos_incompletos === true;
+  // SATJE no respondio: no hay expediente que mostrar (antes se pintaba vacio como "sin datos").
+  const faltaPrincipal = (Array.isArray(datos?.errores_parciales) ? datos.errores_parciales : [])
+    .some((e: any) => ["SATJE_INCOMPLETE_RESPONSE", "FALTA_JUZGADO_PRINCIPAL"].includes(String(e?.code)));
+  const satjeSinRespuesta = Boolean(datos?.backendError) && !(Number(datos?.total_actuaciones) > 0);
   const fechaIngresoCausa: string | null = datos?.fecha_ingreso || null;
   const mostrarValorDemanda = Boolean(causa) && Number(datos?.total_actuaciones) > 0;
   const medidasCount = datos?.resumen_indicadores?.medidas_cautelares_count || 0;
@@ -333,7 +337,27 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
     // Secciones que se llenan aparte (resumen de IA, valor de la demanda). Se lanzan
     // al cargar la pagina Y tambien cuando la consulta se hace desde la propia
     // pagina, que cambia el contenido sin recargar y no dispara DOMContentLoaded.
+    window.reintentarConsulta = function() {
+      var url = new URL(window.location.href);
+      url.searchParams.set('reintento', String(Number(url.searchParams.get('reintento') || '0') + 1));
+      window.ejecutarConsultaClientSide(url.pathname + url.search, '🔄 Reintentando la consulta en el SATJE...');
+    };
+
+    window.programarReintento = function() {
+      var aviso = document.getElementById('reintentoAuto');
+      if (!aviso || aviso.getAttribute('data-reintentar') !== '1') return;
+      var intentos = Number(new URLSearchParams(window.location.search).get('reintento') || '0');
+      if (intentos >= 1) {
+        aviso.textContent = 'Ya se reintentó una vez sin éxito. El SATJE sigue lento: prueba de nuevo en unos minutos con el botón.';
+        return;
+      }
+      aviso.setAttribute('data-reintentar', '0');
+      clearTimeout(window.__reintentoTimer);
+      window.__reintentoTimer = setTimeout(window.reintentarConsulta, 5000);
+    };
+
     window.cargarPendientes = function() {
+      try { window.programarReintento(); } catch (e) { /* el reintento es opcional */ }
       var box = document.getElementById('resumenIaText');
       if (box && box.getAttribute('data-pendiente') === '1') window.cargarResumenIA();
       var boxValor = document.getElementById('valorDemandaBox');
@@ -1233,7 +1257,18 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <div id="cedulaResultados" style="margin-top:1rem;"></div>
         </div>
 
-        ${causa && !esLote ? `
+        ${causa && !esLote && satjeSinRespuesta ? `
+        <!-- SATJE NO RESPONDIO -->
+        <div class="card" id="satjeSinRespuesta" style="border-left: 6px solid #f59e0b; text-align:left;">
+          <div class="kpi-tag warning">⏳ EL SATJE NO RESPONDIÓ A TIEMPO</div>
+          <p style="font-size:1.05rem; color:#e2e8f0; margin:0.4rem 0 0.8rem;">
+            La Función Judicial está respondiendo muy lento y no llegaron los datos del juicio <strong>${escapeHtml(causa)}</strong>.
+            <strong>Esto no significa que el juicio no tenga información.</strong>
+          </p>
+          <p id="reintentoAuto" data-reintentar="1" style="color:var(--text-muted); margin:0 0 0.8rem;">Reintentando automáticamente en unos segundos… lo que ya se alcanzó a bajar queda guardado y la segunda vez suele ser más rápida.</p>
+          <button type="button" class="rr-btn primario" onclick="window.reintentarConsulta()">Reintentar ahora</button>
+        </div>
+        ` : causa && !esLote ? `
         <!-- RESULTADOS INDIVIDUALES -->
         <div class="kpi-grid">
 
@@ -1273,9 +1308,12 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
           <div id="avisoIncompleto" class="kpi-card" style="grid-column: 1 / -1; border-left: 6px solid #f59e0b; background: rgba(245,158,11,0.08);">
             <div class="kpi-tag" style="color:#f59e0b;">⚠️ INFORMACIÓN INCOMPLETA</div>
             <p style="font-size:1rem; color:#e2e8f0; margin-top:0.4rem;">
-              SATJE no respondió completo para esta causa: pueden faltar actuaciones, así que la etapa y los demás datos podrían no ser los reales.
-              Vuelve a consultar en unos minutos; la segunda consulta suele traer el expediente completo.
+              ${faltaPrincipal
+                ? 'El SATJE devolvió <strong>solo parte del expediente</strong> (falta el juzgado principal): la etapa, la alerta y la cronología <strong>no son confiables</strong> todavía.'
+                : 'El SATJE no respondió completo para esta causa: pueden faltar actuaciones, así que la etapa y los demás datos podrían no ser los reales.'}
             </p>
+            <p id="reintentoAuto" data-reintentar="1" style="color:var(--text-muted); margin:0.3rem 0 0.6rem;">Reintentando automáticamente en unos segundos…</p>
+            <button type="button" class="rr-btn primario" style="width:fit-content;" onclick="window.reintentarConsulta()">Reintentar ahora</button>
           </div>` : ''}
 
           <!-- RESUMEN EN 10 SEGUNDOS -->

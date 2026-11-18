@@ -58,7 +58,15 @@ test("una respuesta parcial de SATJE se marca como datos incompletos", async () 
 });
 
 test("una respuesta completa no se marca como incompleta", async () => {
-  await conFetch({ ...respuestaParcial, success: true, partialErrors: [] }, async () => {
+  const completa = {
+    success: true,
+    partialErrors: [],
+    incidentes: [
+      { incidente: 1, nombreJudicatura: "UNIDAD JUDICIAL CIVIL CUENCA", actuaciones: [{ codigo: 2, fecha: "2026-08-01T10:00:00.000+00:00", tipo: "CARATULA DE JUICIO" }] },
+      respuestaParcial.incidentes[1],
+    ],
+  };
+  await conFetch(completa, async () => {
     const r: any = await procesarCausaIndividual("01333202610304", "https://backend.test", "k");
     assert.equal(r.datosIncompletos, false);
     assert.deepEqual(r.erroresParciales, []);
@@ -202,4 +210,27 @@ test("la tarjeta toma 'inscrita' de la API cuando el Registro adjunto la razon",
   const sinDoc = { data: [{ estado: "INSCRIPCION_CONFIRMADA", evidencia: { origen: "actuacion" } }] };
   assert.equal(aplicarConfirmacionMedidaApi(local, sinDoc), local);
   assert.equal(aplicarConfirmacionMedidaApi(local, { data: [] }), local);
+});
+
+test("falta el juzgado principal: solo hay actuaciones del incidente 2", async () => {
+  const { faltaJuzgadoPrincipal } = await import("./procesar-causa.js");
+  assert.equal(faltaJuzgadoPrincipal([{ incidente: 2 }, { incidente: 2 }]), true);
+  assert.equal(faltaJuzgadoPrincipal([{ incidente: 1 }, { incidente: 2 }]), false);
+  assert.equal(faltaJuzgadoPrincipal([{ incidente: 2 }, {}]), false); // sin numeracion completa no se juzga
+  assert.equal(faltaJuzgadoPrincipal([]), false);
+});
+
+test("SATJE devuelve solo el deprecatorio: se marca incompleto aunque no lo reporte", async () => {
+  const original = globalThis.fetch;
+  globalThis.fetch = (async (url: any) => {
+    if (String(url).includes("/abandono/riesgo")) return new Response("x", { status: 504 });
+    return new Response(JSON.stringify({ success: true, partialErrors: [], incidentes: [
+      { incidente: 2, nombreJudicatura: "EL GUABO", actuaciones: [{ codigo: 1, fecha: "2025-07-21T10:00:00Z", tipo: "OFICIO" }] },
+    ] }), { status: 200 });
+  }) as typeof fetch;
+  try {
+    const r: any = await procesarCausaIndividual("01333-2023-10725", "https://backend.test", "k");
+    assert.equal(r.datosIncompletos, true);
+    assert.ok(r.erroresParciales.some((e: any) => e.code === "FALTA_JUZGADO_PRINCIPAL"));
+  } finally { globalThis.fetch = original; }
 });

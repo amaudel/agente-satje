@@ -17,6 +17,13 @@ import { verificarDocumentosDeprecatorio } from "./deprecatorios-documentos.js";
 const PRESUPUESTO_POR_CAUSA_MS = 45000;
 const TIMEOUT_MEDIDAS_API_MS = 12000;
 
+export function faltaJuzgadoPrincipal(actuaciones: any[]): boolean {
+  if (!actuaciones.length) return false;
+  const numeros = actuaciones.map((a) => String(a?.incidente ?? "").trim());
+  if (numeros.some((n) => !n)) return false; // sin numeracion no se puede juzgar
+  return !numeros.includes("1");
+}
+
 export function esPosibleRespuestaRegistro(m: any): boolean {
   return m?.estadoCicloVida === "INSCRIPCION_NO_CONFIRMADA" && String(m?.observacion || "").startsWith("Posible respuesta del Registro");
 }
@@ -196,6 +203,12 @@ export async function procesarCausaIndividual(
       TIMEOUT_ACTUACIONES_MS
     );
     if (rDashed) actuaciones = rDashed;
+  }
+
+  // Defensa propia: si todas las actuaciones traen numero de incidente y ninguna es
+  // del 1 (juzgado principal), SATJE devolvio solo el deprecatorio aunque no lo dijera.
+  if (faltaJuzgadoPrincipal(actuaciones) && !erroresParciales.some((e) => e.code === "SATJE_INCOMPLETE_RESPONSE")) {
+    erroresParciales.push({ code: "FALTA_JUZGADO_PRINCIPAL", stage: "actuaciones", retryable: true });
   }
 
   // Si no hubo actuaciones Y ningun intento llego a responder con exito, es una

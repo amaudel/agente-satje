@@ -140,3 +140,18 @@ test("chat: al cambiar de juicio en pantalla se reinicia la causa y el historial
   assert.match(html, /causaEnPantalla !== window\.chatCausaPagina/);
   assert.match(html, /window\.chatHistorial = \[\];/);
 });
+
+test("SATJE sin respuesta: se avisa en vez de mostrar el tablero vacio", async () => {
+  const { generarDashboardHTML } = await import("./dashboard-html.js");
+  const html = generarDashboardHTML({ causa: "01333-2023-10725", total_actuaciones: 0, backendError: "causas/actuaciones: timeout tras 45000 ms" });
+  assert.match(html, /EL SATJE NO RESPONDIÓ A TIEMPO/);
+  assert.match(html, /no significa que el juicio no tenga información/);
+  assert.doesNotMatch(html, /RESUMEN EN 10 SEGUNDOS/);
+});
+
+test("expediente sin juzgado principal: aviso especifico de informacion incompleta", async () => {
+  const { generarDashboardHTML } = await import("./dashboard-html.js");
+  const html = generarDashboardHTML({ causa: "01333-2023-10725", total_actuaciones: 3, datos_incompletos: true, errores_parciales: [{ code: "FALTA_JUZGADO_PRINCIPAL" }] });
+  assert.match(html, /falta el juzgado principal/);
+  assert.match(html, /Reintentando automáticamente/);
+});
