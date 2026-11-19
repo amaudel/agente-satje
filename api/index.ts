@@ -34,6 +34,9 @@ import { mapConcurrente } from "../lib/concurrencia.js";
 import { CHAT_TOOLS, CHAT_TOOLS_MEMORIA, ejecutarHerramientaChat, type ChatToolContext } from "../lib/chat-tools.js";
 import { configMemoria, leerNotaCausa } from "../lib/memoria.js";
 import { alertaParaIA, fechaLegible, juezNegoAbandono } from "../lib/resumen-rapido.js";
+import { armarGuia, extraerDatosGuia, sanearDatosGuia } from "../lib/guia-audiencia.js";
+import { guiaADocx, nombreArchivoGuia } from "../lib/guia-docx.js";
+import { generarGuiaAudienciaHTML } from "../lib/guia-audiencia-html.js";
 
 // Quien usa la app es la cooperativa: el analisis y el chat le hablan a ella.
 const PERSPECTIVA_COOPERATIVA = `PERSPECTIVA: escribes para el área legal de la Cooperativa de Ahorro y Crédito ERCO Ltda. (COOPERCO). Identifica en los datos si la cooperativa es parte actora (lo usual: cobra un crédito) o demandada. Si es actora, todo el análisis y las recomendaciones son para RECUPERAR EL CRÉDITO: qué falta para avanzar y qué puede pedir la cooperativa (citación, impulso, mandamiento de ejecución, liquidación, embargo o remate de la garantía, según la etapa). Con sentencia ejecutoriada, enfócate en la ejecución, no en defenderse. Habla de los demandados como deudores, no como tu cliente.`;
@@ -691,6 +694,54 @@ El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y 
       } catch (errEstado: any) {
         return res.status(500).json({ ok: false, error: mensajeErrorPublico(errEstado, "estado") });
       }
+    }
+
+    // 2d-guia. GUIA DE AUDIENCIA UNICA. La pagina (GET) llega prellenada con lo
+    // que se lee de las actuaciones del SATJE; el Word (POST) se arma solo con lo
+    // que envia el formulario. No usa OpenAI: no tiene costo por guia.
+    if (req.query.action === "guia-audiencia-docx" || bodyData.action === "guia-audiencia-docx") {
+      if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Usa POST." });
+      try {
+        const datosGuia = sanearDatosGuia(bodyData);
+        if (!causaValida(datosGuia.causa)) return res.status(400).json({ ok: false, error: "Número de juicio no válido." });
+        const guia = armarGuia(datosGuia);
+        const archivo = await guiaADocx(guia);
+        console.log(`[guia] causa=${datosGuia.causa} faltantes=${guia.faltantes} avisos=${guia.avisos.length}`);
+        return res.status(200).json({
+          ok: true,
+          nombre: nombreArchivoGuia(datosGuia.causa),
+          archivo,
+          faltantes: guia.faltantes,
+          avisos: guia.avisos,
+        });
+      } catch (errGuia: any) {
+        return res.status(500).json({ ok: false, error: mensajeErrorPublico(errGuia, "guia") });
+      }
+    }
+
+    if (req.query.action === "guia-audiencia") {
+      const causaGuia = String(req.query.causa || "").trim();
+      if (!causaValida(causaGuia)) {
+        return res.setHeader("Content-Type", "text/html; charset=utf-8").status(400).send(generarGuiaAudienciaHTML(causaGuia, null, "Falta un número de juicio válido."));
+      }
+      const baseUrlGuia = process.env.SATJE_API_BASE_URL || "https://api.asitentekairon.cloud";
+      const apiKeyGuia = process.env.SATJE_API_KEY;
+      let prellenado: ReturnType<typeof extraerDatosGuia> | null = null;
+      let avisoGuia: string | undefined;
+      if (apiKeyGuia) {
+        try {
+          const r = await procesarCausaIndividual(causaGuia, baseUrlGuia, apiKeyGuia);
+          if (Array.isArray(r.actuaciones) && r.actuaciones.length > 0) {
+            prellenado = extraerDatosGuia(r.actuaciones, String(r.causa || causaGuia));
+            if (r.backendError) avisoGuia = "El SATJE respondió a medias: revisa con más cuidado los datos prellenados.";
+          } else {
+            avisoGuia = "El SATJE no respondió a tiempo: el formulario sale vacío. Puedes llenarlo a mano o recargar en un momento.";
+          }
+        } catch {
+          avisoGuia = "No se pudo consultar el SATJE: el formulario sale vacío. Puedes llenarlo a mano o recargar en un momento.";
+        }
+      }
+      return res.setHeader("Content-Type", "text/html; charset=utf-8").status(200).send(generarGuiaAudienciaHTML(causaGuia, prellenado, avisoGuia));
     }
 
     // 2d-bis. VALOR POR EL QUE SE DEMANDA. Se lee de los documentos del inicio del

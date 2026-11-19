@@ -50,6 +50,8 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
   const poseeSentencia = datos?.analisis_dashboard?.posee_sentencia ?? false;
   const fechaSentencia = datos?.analisis_dashboard?.fecha_sentencia || null;
 
+  // Audiencia convocada: se ofrece preparar la guia que la abogada lleva.
+  const hayAudiencia = actuaciones.some((a: any) => /CONVOCATORIA AUDIENCIA|SE CONVOCA A AUDIENCIA/i.test(`${a?.tipo ?? ""} ${a?.actividad ?? ""}`));
   const etapa: ClasificacionEtapa = datos?.clasificacion_etapa || {
     etapaGeneral: "SIN INFO",
     etapaEspecifica: "SIN INFO",
@@ -1331,6 +1333,12 @@ export function generarDashboardHTML(datos: any, esLote: boolean = false, result
             </div>
             <span style="font-size:0.82rem; color:var(--text-muted);">Sugerencia automática a partir de los datos del SATJE. Verificar antes de presentar escritos.</span>
           </section>
+
+          <!-- GUIA DE AUDIENCIA -->
+          <div class="rr-paso" style="${hayAudiencia ? 'border:1px solid var(--accent); border-radius:0.9rem; padding:0.8rem 1rem;' : ''}">
+            <span>${hayAudiencia ? '<strong style="color:var(--accent);">📅 Hay audiencia convocada.</strong> Prepara la guía que la abogada lleva a la audiencia.' : 'Guía para la audiencia única (borrador en Word).'}</span>
+            <a class="rr-btn${hayAudiencia ? ' primario' : ''}" style="display:inline-flex; align-items:center; text-decoration:none;" href="/?action=guia-audiencia&causa=${encodeURIComponent(causa)}">📝 Preparar guía de audiencia</a>
+          </div>
 
           <!-- PANEL DE CLASIFICACIÓN DE ETAPA PROCESAL -->
           <div class="kpi-card etapa-card">

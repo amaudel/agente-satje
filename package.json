@@ -19,6 +19,7 @@
     "wrangler": "4.149.0"
   },
   "dependencies": {
+    "docx": "^9.16.0",
     "openai": "^4.67.3"
   }
 }
