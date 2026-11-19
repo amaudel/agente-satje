@@ -19,8 +19,8 @@ function corridas(trozos: Trozo[], extra: { italics?: boolean; color?: string } 
       new TextRun({
         text: t.t,
         bold: t.negrita || t.completar,
-        italics: extra.italics,
-        color: t.completar ? "9A3412" : extra.color,
+        italics: t.ia ? false : extra.italics,
+        color: t.completar ? "9A3412" : t.ia ? "7C3AED" : extra.color,
         highlight: t.completar ? "yellow" : undefined,
         font: FUENTE,
       })

@@ -72,12 +72,21 @@ export interface DatosGuia {
   audienciaHora?: string;
   audienciaSala?: string;
   juezNombre?: string;
+  ia?: AportesIA;
+}
+
+/** Lo que la IA sugirio a partir de la contestacion y la abogada dejo marcado. */
+export interface AportesIA {
+  puntos: { argumento: string; pagina?: number; respuesta: string }[];
+  contradicciones: { texto: string; pagina?: number }[];
+  otrasExcepciones: { nombre: string; resumen: string; pagina?: number }[];
 }
 
 export interface Trozo {
   t: string;
   completar?: boolean;
   negrita?: boolean;
+  ia?: boolean; // redactado por IA: va en otro color y hay que revisarlo
 }
 
 export type Bloque =
@@ -194,6 +203,11 @@ export function fechaEcuador(iso: string): string | undefined {
 
 // ---------------------------------------------------------------------------
 // Armado de la guia
+
+function minusculaInicial(s: string): string {
+  // "El pagaré..." -> "el pagaré..."; deja siglas como "SEPS" intactas
+  return /^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/.test(s) ? s.charAt(0).toLowerCase() + s.slice(1) : s;
+}
 
 function hayTexto(v: unknown): boolean {
   return v !== undefined && v !== null && String(v).trim() !== "";
@@ -371,6 +385,12 @@ export function armarGuia(d: DatosGuia): GuiaArmada {
 
   if (m.legitimacion || m.prescripcion || m.falsedad) {
     bloques.push(nota(`SI LA EXCEPCIÓN ES ACEPTADA: "${T}, conforme a lo establecido en el artículo 256 del Código Orgánico General de Procesos, apelo el auto interlocutorio emitido por Su Autoridad." Fundamentar de conformidad con el artículo 257 del COGEP.`));
+  }
+
+  if (d.ia && d.ia.otrasExcepciones.length) {
+    bloques.push({ tipo: "nota", trozos: [{ t: "OTRAS EXCEPCIONES DEL DEUDOR sin texto modelo (detectadas por IA) — preparar respuesta:", ia: true, negrita: true }] });
+    bloques.push({ tipo: "lista", items: d.ia.otrasExcepciones.map((o) => [{ t: `${o.nombre}: ${o.resumen}${o.pagina ? ` (pág. ${o.pagina})` : ""}`, ia: true }]) });
+    avisos.push(`El deudor planteó excepciones que no están en las guías modelo (${d.ia.otrasExcepciones.map((o) => o.nombre).join(", ")}): hay que preparar la respuesta a mano.`);
   }
 
   // ---------------- Saneamiento ----------------
@@ -589,6 +609,22 @@ export function armarGuia(d: DatosGuia): GuiaArmada {
       )
     );
   }
+  const ia = d.ia;
+  const pag = (n?: number) => (n ? ` (pág. ${n} de la contestación)` : "");
+  if (ia && ia.puntos.length) {
+    bloques.push({ tipo: "nota", trozos: [{ t: "RESPUESTA A LOS ARGUMENTOS DEL DEUDOR — sugerido por IA a partir de su contestación. REVISAR antes de usar:", ia: true, negrita: true }] });
+    bloques.push({
+      tipo: "lista",
+      items: ia.puntos.map((x) => [
+        { t: `La parte demandada alega que ${minusculaInicial(x.argumento.replace(/\.$/, ""))}${pag(x.pagina)}. `, ia: true },
+        { t: x.respuesta, ia: true },
+      ]),
+    });
+  }
+  if (ia && ia.contradicciones.length) {
+    bloques.push({ tipo: "nota", trozos: [{ t: "CONTRADICCIONES Y ADMISIONES DEL DEUDOR para destacar — sugerido por IA. REVISAR:", ia: true, negrita: true }] });
+    bloques.push({ tipo: "lista", items: ia.contradicciones.map((c) => [{ t: `${c.texto}${pag(c.pagina)}`, ia: true }]) });
+  }
   bloques.push(p(`Ese ha sido mi alegato de cierre, ${T}. Devuelvo la palabra a Su Autoridad.`));
 
   // ---------------- Frases de reserva ----------------
@@ -599,6 +635,10 @@ export function armarGuia(d: DatosGuia): GuiaArmada {
     )
   );
   bloques.push(nota(`EN CASO DE APELACIÓN: "${T}, conforme a lo establecido en el artículo 256 del Código Orgánico General de Procesos, apelo la decisión emitida por Su Autoridad."`));
+
+  if (d.ia && (d.ia.puntos.length || d.ia.contradicciones.length || d.ia.otrasExcepciones.length)) {
+    avisos.push("Las partes en MORADO las redactó la IA leyendo la contestación: revisarlas y corregirlas antes de la audiencia.");
+  }
 
   // ---------------- Revision de coherencia ----------------
   avisos.push(...revisarCoherencia(d));
@@ -894,5 +934,30 @@ export function sanearDatosGuia(b: any): DatosGuia {
     audienciaHora: texto(b?.audienciaHora, 20),
     audienciaSala: texto(b?.audienciaSala, 20),
     juezNombre: texto(b?.juezNombre, 120),
+    ia: sanearAportesIA(b?.ia),
   };
+}
+
+function sanearAportesIA(v: any): AportesIA | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const pag = (n: unknown) => {
+    const x = Number(n);
+    return Number.isInteger(x) && x > 0 && x < 500 ? x : undefined;
+  };
+  const lista = (x: unknown) => (Array.isArray(x) ? x : []);
+  const ia: AportesIA = {
+    puntos: lista(v.puntos)
+      .slice(0, 8)
+      .map((x: any) => ({ argumento: texto(x?.argumento, 300) ?? "", pagina: pag(x?.pagina), respuesta: texto(x?.respuesta, 900) ?? "" }))
+      .filter((x) => x.argumento && x.respuesta),
+    contradicciones: lista(v.contradicciones)
+      .slice(0, 5)
+      .map((x: any) => ({ texto: texto(x?.texto, 400) ?? "", pagina: pag(x?.pagina) }))
+      .filter((x) => x.texto),
+    otrasExcepciones: lista(v.otrasExcepciones)
+      .slice(0, 6)
+      .map((x: any) => ({ nombre: texto(x?.nombre, 80) ?? "", resumen: texto(x?.resumen, 300) ?? "", pagina: pag(x?.pagina) }))
+      .filter((x) => x.nombre),
+  };
+  return ia.puntos.length || ia.contradicciones.length || ia.otrasExcepciones.length ? ia : undefined;
 }

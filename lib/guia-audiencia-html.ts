@@ -62,6 +62,13 @@ export function generarGuiaAudienciaHTML(causa: string, pre: PrellenadoGuia | nu
   .aviso { border-left:5px solid var(--alerta); }
   #resultado ul { margin:.4rem 0 0 1.1rem; padding:0; }
   .barra { position:sticky; bottom:0; background:linear-gradient(transparent, var(--bg) 35%); padding:1.2rem 0 .6rem; display:flex; gap:.8rem; align-items:center; flex-wrap:wrap; }
+  .ia-campo { border-color:#a78bfa !important; box-shadow: 0 0 0 1px #a78bfa inset; }
+  .ia-tag { color:#c4b5fd; font-size:.8rem; }
+  .ia-card { border-left:5px solid #a78bfa; }
+  .ia-lista { list-style:none; margin:.4rem 0 0; padding:0; display:grid; gap:.45rem; }
+  .ia-lista label { display:flex; gap:.5rem; align-items:flex-start; color:var(--texto); font-size:.93rem; }
+  .ia-lista input { margin-top:.25rem; flex:none; }
+  input[type=file] { color:var(--texto); margin:.3rem 0 .6rem; }
   @media (max-width: 620px) { .deudor { grid-template-columns: 1fr 1fr; } .deudor .nom { grid-column: 1 / -1; } }
 </style>
 </head>
@@ -75,11 +82,22 @@ export function generarGuiaAudienciaHTML(causa: string, pre: PrellenadoGuia | nu
   ${
     detectado.length
       ? `<div class="card detectado"><strong>✅ Tomado del SATJE:</strong> ${esc(detectado.join(", "))}. Revísalo; puedes cambiar cualquier dato.
-      <p class="pista">La demanda y la contestación se entregaron en papel: el SATJE no tiene su texto, por eso los datos del crédito y las excepciones se llenan aquí.</p></div>`
+      <p class="pista">La demanda se entregó en papel y el SATJE no tiene su texto. Los datos del crédito y las excepciones se llenan aquí, a mano o leyendo la contestación con IA.</p></div>`
       : ""
   }
 
   <form id="f" autocomplete="off">
+    <section class="card ia-card">
+      <h2>🤖 Leer la contestación con IA (opcional)</h2>
+      <p class="pista" style="margin-top:0">Sube el PDF de la contestación del deudor (descárgalo del SATJE, en "Anexos" del escrito) o fotos de sus páginas. La IA marca las excepciones, llena los datos que encuentre y prepara respuestas para el alegato. <strong>Cuesta unos centavos por lectura.</strong></p>
+      <input type="file" id="archivoContestacion" accept="application/pdf,image/jpeg,image/png,image/webp" multiple>
+      <div style="display:flex; gap:.7rem; align-items:center; flex-wrap:wrap">
+        <button type="button" class="btn sec" id="leerIA">Leer con IA</button>
+        <span class="pista" id="estadoIA" style="margin:0"></span>
+      </div>
+      <div id="resultadoIA"></div>
+    </section>
+
     <section class="card">
       <h2>1. Audiencia</h2>
       <div class="grid">
@@ -168,7 +186,7 @@ export function generarGuiaAudienciaHTML(causa: string, pre: PrellenadoGuia | nu
     <div id="resultado"></div>
     <div class="barra">
       <button type="submit" class="btn" id="generar">Generar guía en Word</button>
-      <span class="pista">No usa la IA: no tiene costo.</span>
+      <span class="pista">Generar el Word no usa IA: no tiene costo.</span>
     </div>
   </form>
 </main>
@@ -222,6 +240,151 @@ export function generarGuiaAudienciaHTML(causa: string, pre: PrellenadoGuia | nu
 
   function val(n) { var c = campo(n); return c ? (c.type === 'checkbox' ? c.checked : c.value) : undefined; }
 
+  // ---- Lectura de la contestacion con IA ----
+  var iaDatos = null;
+  var estadoIA = document.getElementById('estadoIA');
+  var cajaIA = document.getElementById('resultadoIA');
+
+  function leerBase64(blob) {
+    return new Promise(function (ok, mal) {
+      var r = new FileReader();
+      r.onload = function () { ok(String(r.result).split(',')[1] || ''); };
+      r.onerror = function () { mal(new Error('No se pudo leer el archivo.')); };
+      r.readAsDataURL(blob);
+    });
+  }
+  // Las fotos del celular pesan mucho: se achican a 1600 px en JPEG antes de enviarlas.
+  function achicarFoto(file) {
+    return createImageBitmap(file).then(function (img) {
+      var escala = Math.min(1, 1600 / Math.max(img.width, img.height));
+      var c = document.createElement('canvas');
+      c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      return new Promise(function (ok) { c.toBlob(function (b) { ok(b); }, 'image/jpeg', 0.8); });
+    }).then(function (blob) { return leerBase64(blob).then(function (d) { return { nombre: file.name, tipo: 'image/jpeg', datos: d }; }); });
+  }
+  function prepararArchivos(lista) {
+    var files = Array.prototype.slice.call(lista);
+    if (!files.length) return Promise.reject(new Error('Primero elige el PDF o las fotos de la contestación.'));
+    var pdfs = files.filter(function (f) { return f.type === 'application/pdf'; });
+    if (pdfs.length > 1 || (pdfs.length && pdfs.length !== files.length)) return Promise.reject(new Error('Sube un solo PDF, o solo fotos.'));
+    if (pdfs.length) {
+      if (pdfs[0].size > 3300000) return Promise.reject(new Error('El PDF pesa más de 3 MB. Sube fotos de las páginas principales (la app las achica) o un PDF más liviano.'));
+      return leerBase64(pdfs[0]).then(function (d) { return [{ nombre: pdfs[0].name, tipo: 'application/pdf', datos: d }]; });
+    }
+    if (files.length > 15) return Promise.reject(new Error('Máximo 15 fotos.'));
+    return Promise.all(files.map(achicarFoto));
+  }
+
+  // Solo se llenan casillas vacias: lo que ya escribio la abogada no se toca.
+  var llenados = [];
+  function sugerir(n, v, etiqueta) {
+    var c = campo(n);
+    if (!c || v === undefined || v === null || v === '' || String(c.value).trim() !== '') return;
+    c.value = v; c.classList.add('ia-campo'); c.title = 'Leído por IA: revisar';
+    llenados.push(etiqueta);
+  }
+  function marcar(n, v) {
+    var c = campo(n);
+    if (c && v && !c.checked) { c.checked = true; c.dispatchEvent(new Event('change')); }
+  }
+  function aplicarIA(r) {
+    llenados = [];
+    var ex = r.excepciones || {}, pr = r.pruebaDeudor || {}, dc = r.datosCredito || {};
+    marcar('m_legitimacion', ex.legitimacion); marcar('m_requisitos', ex.requisitos);
+    marcar('m_falsedad', ex.falsedad); marcar('m_prescripcion', ex.prescripcion);
+    if (ex.requisitos) { var fl = campo('requisitoFechaLugar'); if (fl) fl.checked = Boolean(ex.faltaFechaLugar); marcar('requisitoLugarPago', ex.faltaLugarPago); }
+    marcar('op_pericia', pr.pericia); marcar('op_testigos', pr.testigos);
+    marcar('op_declaracionGerente', pr.declaracionGerente); marcar('op_oficios', pr.oficios);
+    // La oposicion a la prueba vive dentro del bloque de falsedad: se muestra aunque no haya esa excepcion.
+    if ((pr.pericia || pr.testigos || pr.declaracionGerente || pr.oficios) && !ex.falsedad) document.getElementById('x_falsedad').classList.add('visible');
+    marcar('reconoceDeuda', r.reconoceDeuda);
+    sugerir('numeroPagare', dc.numeroPagare, 'número de pagaré');
+    if (dc.montoPagare) sugerir('montoPagare', Number(dc.montoPagare).toFixed(2).replace('.', ','), 'monto');
+    sugerir('fechaSuscripcion', dc.fechaSuscripcion, 'fecha de suscripción');
+    sugerir('tasa', dc.tasa, 'tasa');
+    sugerir('plazo', dc.plazo, 'plazo');
+    sugerir('dividendoMora', dc.dividendoMora, 'dividendo en mora');
+    sugerir('fechaMora', dc.fechaMora, 'fecha de mora');
+    if (dc.saldoCapital) sugerir('saldoCapital', Number(dc.saldoCapital).toFixed(2).replace('.', ','), 'saldo de capital');
+    sugerir('entidadOriginal', dc.entidadOriginal, 'entidad que endosó');
+    sugerir('fechaEndoso', dc.fechaEndoso, 'fecha del endoso');
+    sugerir('fechaUltimoPago', dc.fechaUltimoPago, 'fecha del último pago');
+    if (dc.dividendoMora && !String(val('dividendosPagados') || '').trim()) sugerir('dividendosPagados', dc.dividendoMora - 1, 'dividendos pagados');
+  }
+
+  function itemsMarcables(lista, clase, texto) {
+    return '<ul class="ia-lista">' + lista.map(function (x, i) {
+      return '<li><label><input type="checkbox" class="' + clase + '" data-i="' + i + '" checked><span>' + texto(x) + '</span></label></li>';
+    }).join('') + '</ul>';
+  }
+  function pintarIA(r, uso) {
+    var ex = r.excepciones || {};
+    var nombres = [];
+    if (ex.legitimacion) nombres.push('falta de legitimación / endoso');
+    if (ex.requisitos) nombres.push('requisitos del pagaré');
+    if (ex.falsedad) nombres.push('nulidad o falsedad del título');
+    if (ex.prescripcion) nombres.push('prescripción');
+    (ex.otras || []).forEach(function (o) { nombres.push(o.nombre + ' (sin texto modelo)'); });
+    var pag = function (n) { return n ? ' <span class="ia-tag">pág. ' + n + '</span>' : ''; };
+    var h = '<div class="card ia-card" style="margin-top:.8rem">';
+    (r.advertencias || []).forEach(function (a) { h += '<p>⚠️ ' + esc(a) + '</p>'; });
+    h += '<p style="margin-top:0"><strong>Contesta:</strong> ' + esc(r.quienContesta || 'no se identificó') + '</p>';
+    h += '<p><strong>Excepciones encontradas:</strong> ' + esc(nombres.length ? nombres.join(', ') : 'ninguna') + '. Ya quedaron marcadas abajo.</p>';
+    if (r.reconoceDeuda) h += '<p><strong>Reconoce la deuda:</strong> sí' + (r.reconoceDeudaCita ? ' — <em>"' + esc(r.reconoceDeudaCita) + '"</em>' : '') + '</p>';
+    if (r.pruebaDeudor && r.pruebaDeudor.detalle && r.pruebaDeudor.detalle.length) h += '<p><strong>Prueba que pidió el deudor:</strong> ' + esc(r.pruebaDeudor.detalle.join('; ')) + '</p>';
+    h += '<p><strong>Datos llenados</strong> <span class="ia-tag">(borde morado, revisar)</span>: ' + esc(llenados.length ? llenados.join(', ') : 'ninguno nuevo') + '</p>';
+    if (r.puntosARebatir && r.puntosARebatir.length) {
+      h += '<p style="margin-bottom:0"><strong>Respuestas sugeridas para el alegato</strong> <span class="ia-tag">(desmarca las que no quieras en la guía)</span>:</p>';
+      h += itemsMarcables(r.puntosARebatir, 'ia-punto', function (x) { return '<strong>Alega:</strong> ' + esc(x.argumento) + pag(x.pagina) + '<br><strong>Respuesta:</strong> ' + esc(x.respuesta); });
+    }
+    if (r.contradicciones && r.contradicciones.length) {
+      h += '<p style="margin-bottom:0"><strong>Contradicciones y admisiones del deudor:</strong></p>';
+      h += itemsMarcables(r.contradicciones, 'ia-contra', function (x) { return esc(x.texto) + pag(x.pagina); });
+    }
+    if (uso && typeof uso.costoUSD === 'number') h += '<p class="pista">Costo de esta lectura: aprox. USD ' + uso.costoUSD.toFixed(3) + '.</p>';
+    h += '</div>';
+    cajaIA.innerHTML = h;
+  }
+  function aportesIA() {
+    if (!iaDatos) return undefined;
+    var elegidos = function (clase, lista) {
+      return Array.prototype.filter.call(cajaIA.querySelectorAll('.' + clase), function (c) { return c.checked; })
+        .map(function (c) { return lista[Number(c.getAttribute('data-i'))]; });
+    };
+    return {
+      puntos: elegidos('ia-punto', iaDatos.puntosARebatir || []),
+      contradicciones: elegidos('ia-contra', iaDatos.contradicciones || []),
+      otrasExcepciones: (iaDatos.excepciones && iaDatos.excepciones.otras) || []
+    };
+  }
+
+  document.getElementById('leerIA').addEventListener('click', function () {
+    var btn = this;
+    btn.disabled = true; cajaIA.innerHTML = '';
+    estadoIA.textContent = 'Preparando el archivo…';
+    prepararArchivos(document.getElementById('archivoContestacion').files)
+      .then(function (archivos) {
+        estadoIA.textContent = 'La IA está leyendo la contestación (30 a 50 segundos)…';
+        return fetch('/?action=leer-contestacion&format=json', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+          body: JSON.stringify({ action: 'leer-contestacion', causa: ini.causa, archivos: archivos })
+        });
+      })
+      .then(function (r) {
+        if (r.status === 413) throw new Error('El archivo es demasiado grande. Sube fotos de las páginas principales.');
+        return r.json().then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || 'No se pudo leer la contestación.'); return j; });
+      })
+      .then(function (j) {
+        iaDatos = j.resultado;
+        aplicarIA(iaDatos);
+        pintarIA(iaDatos, j.uso);
+        estadoIA.textContent = '✅ Listo. Revisa lo marcado y completa lo que falte.';
+      })
+      .catch(function (e) { estadoIA.textContent = ''; cajaIA.innerHTML = '<div class="card aviso" style="margin-top:.8rem">❌ ' + esc(e.message || e) + '</div>'; })
+      .finally(function () { btn.disabled = false; });
+  });
+
   var res = document.getElementById('resultado');
   function mostrar(html, clase) { res.innerHTML = '<div class="card ' + (clase || '') + '">' + html + '</div>'; }
   function esc(s) { var d = document.createElement('div'); d.textContent = String(s); return d.innerHTML; }
@@ -251,7 +414,8 @@ export function generarGuiaAudienciaHTML(causa: string, pre: PrellenadoGuia | nu
       requisitoFechaLugar: val('requisitoFechaLugar'), requisitoLugarPago: val('requisitoLugarPago'),
       oposicion: { pericia: val('op_pericia'), testigos: val('op_testigos'), declaracionGerente: val('op_declaracionGerente'), oficios: val('op_oficios') },
       fechaUltimoPago: val('fechaUltimoPago'), dividendoUltimoPago: val('dividendoUltimoPago'), fechaCitacion: val('fechaCitacion'),
-      fechaDiferimiento: val('fechaDiferimiento')
+      fechaDiferimiento: val('fechaDiferimiento'),
+      ia: aportesIA()
     };
     var btn = document.getElementById('generar');
     btn.disabled = true; btn.textContent = 'Generando…';

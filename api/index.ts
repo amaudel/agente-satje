@@ -37,6 +37,16 @@ import { alertaParaIA, fechaLegible, juezNegoAbandono } from "../lib/resumen-rap
 import { armarGuia, extraerDatosGuia, sanearDatosGuia } from "../lib/guia-audiencia.js";
 import { guiaADocx, nombreArchivoGuia } from "../lib/guia-docx.js";
 import { generarGuiaAudienciaHTML } from "../lib/guia-audiencia-html.js";
+import {
+  MODELO_CONTESTACION,
+  MODELO_CONTESTACION_RESPALDO,
+  PROMPT_SISTEMA_CONTESTACION,
+  contenidoUsuarioContestacion,
+  costoEstimado,
+  interpretarRespuestaContestacion,
+  validarArchivos,
+  type ArchivoSubido,
+} from "../lib/contestacion-ia.js";
 
 // Quien usa la app es la cooperativa: el analisis y el chat le hablan a ella.
 const PERSPECTIVA_COOPERATIVA = `PERSPECTIVA: escribes para el área legal de la Cooperativa de Ahorro y Crédito ERCO Ltda. (COOPERCO). Identifica en los datos si la cooperativa es parte actora (lo usual: cobra un crédito) o demandada. Si es actora, todo el análisis y las recomendaciones son para RECUPERAR EL CRÉDITO: qué falta para avanzar y qué puede pedir la cooperativa (citación, impulso, mandamiento de ejecución, liquidación, embargo o remate de la garantía, según la etapa). Con sentencia ejecutoriada, enfócate en la ejecución, no en defenderse. Habla de los demandados como deudores, no como tu cliente.`;
@@ -716,6 +726,63 @@ El expediente en inspeccion llega en el siguiente mensaje, entre <expediente> y 
         });
       } catch (errGuia: any) {
         return res.status(500).json({ ok: false, error: mensajeErrorPublico(errGuia, "guia") });
+      }
+    }
+
+    // 2d-guia-ia. LEER LA CONTESTACION CON IA. La abogada sube el PDF o fotos del
+    // escrito del deudor; se manda directo a OpenAI (lee escaneos) y se devuelve
+    // lo que planteo el deudor para prellenar el formulario. Cuesta centavos.
+    if (bodyData.action === "leer-contestacion") {
+      if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Usa POST." });
+      if (!openaiKey) return res.status(500).json({ ok: false, error: "API Key de OpenAI no configurada." });
+      const errorArchivos = validarArchivos(bodyData.archivos);
+      if (errorArchivos) return res.status(400).json({ ok: false, error: errorArchivos });
+      const archivos: ArchivoSubido[] = bodyData.archivos.map((a: any) => ({
+        nombre: String(a.nombre || "contestacion").slice(0, 80),
+        tipo: String(a.tipo),
+        datos: String(a.datos),
+      }));
+      const causaIA = causaValida(bodyData.causa) || "sin-causa";
+      const openai = new OpenAI({ apiKey: openaiKey, timeout: 50000, maxRetries: 0 });
+      const pedir = (modelo: string) =>
+        openai.chat.completions.create({
+          model: modelo,
+          temperature: 0.1,
+          max_tokens: 3000,
+          response_format: { type: "json_object" },
+          messages: [
+            { role: "system", content: PROMPT_SISTEMA_CONTESTACION },
+            { role: "user", content: contenidoUsuarioContestacion(archivos) as any },
+          ],
+        });
+      try {
+        let modelo = MODELO_CONTESTACION;
+        let completion;
+        try {
+          completion = await pedir(modelo);
+        } catch (errModelo: any) {
+          // Si la cuenta no tiene el modelo principal, se usa el de respaldo.
+          if (errModelo?.status !== 404 && errModelo?.code !== "model_not_found") throw errModelo;
+          modelo = MODELO_CONTESTACION_RESPALDO;
+          completion = await pedir(modelo);
+        }
+        let crudo: any = null;
+        try {
+          crudo = JSON.parse(completion.choices[0]?.message?.content || "null");
+        } catch {
+          crudo = null;
+        }
+        if (!crudo) return res.status(502).json({ ok: false, error: "La IA no devolvió una respuesta válida. Intenta de nuevo." });
+        const resultadoIA = interpretarRespuestaContestacion(crudo);
+        const entrada = completion.usage?.prompt_tokens ?? 0;
+        const salida = completion.usage?.completion_tokens ?? 0;
+        const costo = costoEstimado(modelo, entrada, salida);
+        console.log(`[contestacion-ia] causa=${causaIA} modelo=${modelo} archivos=${archivos.length} tokens=${entrada}/${salida} costoUSD=${costo}`);
+        return res.status(200).json({ ok: true, resultado: resultadoIA, uso: { modelo, tokensEntrada: entrada, tokensSalida: salida, costoUSD: costo } });
+      } catch (errIA: any) {
+        const tiempo = errIA?.name === "APIConnectionTimeoutError" || /timeout/i.test(String(errIA?.message));
+        if (tiempo) return res.status(504).json({ ok: false, error: "La IA tardó demasiado. Prueba con menos páginas (solo las de excepciones y prueba)." });
+        return res.status(500).json({ ok: false, error: mensajeErrorPublico(errIA, "contestacion-ia") });
       }
     }
 
